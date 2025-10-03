@@ -1,0 +1,592 @@
+#!/usr/bin/env python3
+"""
+Prompt Tracker - CLI tool for managing and rating prompts from history.jsonl
+"""
+
+import sqlite3
+import json
+import argparse
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, List, Dict
+import sys
+import subprocess
+import shlex
+import tempfile
+import os
+
+DEFAULT_HISTORY_PATH = Path.home() / ".claude" / "history.jsonl"
+DEFAULT_DB_PATH = Path.home() / ".config" / "prompt_tracker" / "instance.db"
+
+
+class PromptTracker:
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH):
+        self.db_path = db_path
+        # Ensure directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
+        self._init_db()
+
+    def _init_db(self):
+        """Initialize database schema"""
+        cursor = self.conn.cursor()
+
+        # Prompts table - copy of history.jsonl data
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prompts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER UNIQUE NOT NULL,
+                display TEXT NOT NULL,
+                project TEXT,
+                pasted_contents TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Ratings and notes table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prompt_metadata (
+                prompt_id INTEGER PRIMARY KEY,
+                rating INTEGER CHECK(rating >= 1 AND rating <= 5),
+                note TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (prompt_id) REFERENCES prompts(id)
+            )
+        """)
+
+        # Create indexes for faster queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_timestamp ON prompts(timestamp DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_rating ON prompt_metadata(rating)
+        """)
+
+        self.conn.commit()
+
+    def sync(self, history_path: Path = DEFAULT_HISTORY_PATH):
+        """Sync prompts from history.jsonl to SQLite"""
+        cursor = self.conn.cursor()
+        new_count = 0
+
+        with open(history_path, 'r') as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    timestamp = entry.get('timestamp')
+                    display = entry.get('display', '')
+                    project = entry.get('project', '')
+                    pasted = json.dumps(entry.get('pastedContents', {}))
+
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO prompts (timestamp, display, project, pasted_contents)
+                        VALUES (?, ?, ?, ?)
+                    """, (timestamp, display, project, pasted))
+
+                    if cursor.rowcount > 0:
+                        new_count += 1
+
+                except json.JSONDecodeError:
+                    continue
+
+        self.conn.commit()
+        return new_count
+
+    def list_prompts(self, limit: int = 20, min_rating: Optional[int] = None,
+                    date_from: Optional[str] = None, date_to: Optional[str] = None,
+                    search: Optional[str] = None, include_slash_commands: bool = False):
+        """List prompts with their ratings"""
+        cursor = self.conn.cursor()
+
+        query = """
+            SELECT p.id, p.timestamp, p.display, p.project,
+                   m.rating, m.note
+            FROM prompts p
+            LEFT JOIN prompt_metadata m ON p.id = m.prompt_id
+            WHERE 1=1
+        """
+        params = []
+
+        # Filter out slash commands by default
+        if not include_slash_commands:
+            query += " AND p.display NOT LIKE '/login%' AND p.display NOT LIKE '/logout%'"
+
+        if min_rating:
+            query += " AND m.rating >= ?"
+            params.append(min_rating)
+
+        if date_from:
+            dt = datetime.strptime(date_from, '%Y-%m-%d')
+            query += " AND p.timestamp >= ?"
+            params.append(int(dt.timestamp() * 1000))
+
+        if date_to:
+            dt = datetime.strptime(date_to, '%Y-%m-%d')
+            query += " AND p.timestamp <= ?"
+            params.append(int(dt.timestamp() * 1000))
+
+        if search:
+            query += " AND p.display LIKE ?"
+            params.append(f"%{search}%")
+
+        query += " ORDER BY p.timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+    def rate_prompt(self, prompt_id: int, rating: int):
+        """Set rating for a prompt"""
+        if not 1 <= rating <= 5:
+            raise ValueError("Rating must be between 1 and 5")
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO prompt_metadata (prompt_id, rating)
+            VALUES (?, ?)
+            ON CONFLICT(prompt_id) DO UPDATE SET
+                rating = excluded.rating,
+                updated_at = CURRENT_TIMESTAMP
+        """, (prompt_id, rating))
+        self.conn.commit()
+
+    def add_note(self, prompt_id: int, note: str):
+        """Add or update note for a prompt"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO prompt_metadata (prompt_id, note)
+            VALUES (?, ?)
+            ON CONFLICT(prompt_id) DO UPDATE SET
+                note = excluded.note,
+                updated_at = CURRENT_TIMESTAMP
+        """, (prompt_id, note))
+        self.conn.commit()
+
+    def get_prompt(self, prompt_id: int) -> Optional[Dict]:
+        """Get a single prompt with metadata"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT p.id, p.timestamp, p.display, p.project,
+                   m.rating, m.note, m.updated_at
+            FROM prompts p
+            LEFT JOIN prompt_metadata m ON p.id = m.prompt_id
+            WHERE p.id = ?
+        """, (prompt_id,))
+        return cursor.fetchone()
+
+    def stats(self):
+        """Get statistics about prompts and ratings"""
+        cursor = self.conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM prompts")
+        total = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM prompt_metadata WHERE rating IS NOT NULL")
+        rated = cursor.fetchone()[0]
+
+        cursor.execute("SELECT AVG(rating) FROM prompt_metadata WHERE rating IS NOT NULL")
+        avg_rating = cursor.fetchone()[0] or 0
+
+        cursor.execute("""
+            SELECT rating, COUNT(*) as count
+            FROM prompt_metadata
+            WHERE rating IS NOT NULL
+            GROUP BY rating
+            ORDER BY rating
+        """)
+        distribution = cursor.fetchall()
+
+        return {
+            'total': total,
+            'rated': rated,
+            'avg_rating': avg_rating,
+            'distribution': distribution
+        }
+
+    def get_prompts_by_date(self, date_from: str, date_to: Optional[str] = None,
+                           include_slash_commands: bool = False) -> List:
+        """Get all prompts for a specific date or date range"""
+        cursor = self.conn.cursor()
+
+        # Parse the from date
+        dt_from = datetime.strptime(date_from, '%Y-%m-%d')
+        start_ts = int(dt_from.timestamp() * 1000)
+
+        # Parse the to date (or use same day if not provided)
+        if date_to:
+            dt_to = datetime.strptime(date_to, '%Y-%m-%d')
+        else:
+            dt_to = dt_from
+
+        end_dt = datetime(dt_to.year, dt_to.month, dt_to.day, 23, 59, 59)
+        end_ts = int(end_dt.timestamp() * 1000)
+
+        query = """
+            SELECT p.id, p.timestamp, p.display, p.project,
+                   m.rating, m.note
+            FROM prompts p
+            LEFT JOIN prompt_metadata m ON p.id = m.prompt_id
+            WHERE p.timestamp >= ? AND p.timestamp <= ?
+        """
+        params = [start_ts, end_ts]
+
+        if not include_slash_commands:
+            query += " AND p.display NOT LIKE '/login%' AND p.display NOT LIKE '/logout%'"
+
+        query += " ORDER BY p.timestamp ASC"
+
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+    def publish_to_memento(self, prompt_id: int, note_id: Optional[str] = None,
+                          tags: Optional[List[str]] = None) -> Dict:
+        """Publish a prompt to Memento as a note"""
+        prompt = self.get_prompt(prompt_id)
+        if not prompt:
+            raise ValueError(f"Prompt #{prompt_id} not found")
+
+        # Generate note ID if not provided
+        if not note_id:
+            dt = datetime.fromtimestamp(prompt['timestamp'] / 1000)
+            note_id = f"prompt-{dt.strftime('%Y%m%d-%H%M%S')}"
+
+        # Format title
+        display = prompt['display']
+        title = display[:60] + "..." if len(display) > 60 else display
+
+        # Build content
+        dt = datetime.fromtimestamp(prompt['timestamp'] / 1000)
+        stars = format_stars(prompt['rating'])
+
+        content_parts = [
+            f"#+TITLE: {title}",
+            f"#+DATE: {dt.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"#+PROMPT_ID: {prompt_id}",
+            f"#+RATING: {stars}",
+        ]
+
+        if tags:
+            content_parts.append(f"#+TAGS: {' '.join(tags)}")
+
+        if prompt['project']:
+            content_parts.append(f"#+PROJECT: {prompt['project']}")
+
+        content_parts.append("")
+        content_parts.append("* Prompt")
+        content_parts.append("")
+        content_parts.append(prompt['display'])
+
+        if prompt['note']:
+            content_parts.append("")
+            content_parts.append("* Notes")
+            content_parts.append("")
+            content_parts.append(prompt['note'])
+
+        content = "\n".join(content_parts)
+
+        return {
+            'note_id': note_id,
+            'title': title,
+            'content': content,
+            'tags': tags or []
+        }
+
+    def generate_timeline_html(self, date_from: str, date_to: Optional[str] = None,
+                              include_slash_commands: bool = False, output_file: Optional[Path] = None) -> Path:
+        """Generate HTML timeline visualization"""
+        prompts = self.get_prompts_by_date(date_from, date_to, include_slash_commands)
+
+        # Prepare data for JavaScript
+        prompts_data = []
+        for p in prompts:
+            prompts_data.append({
+                'id': p['id'],
+                'timestamp': p['timestamp'],
+                'display': p['display'],
+                'project': p['project'],
+                'rating': p['rating'],
+                'note': p['note']
+            })
+
+        # Determine output file
+        if not output_file:
+            if date_to and date_to != date_from:
+                filename = f"timeline_{date_from}_to_{date_to}.html"
+            else:
+                filename = f"timeline_{date_from}.html"
+            output_file = Path.home() / "Downloads" / filename
+
+        # Read template
+        template_path = Path(__file__).parent / "prompt_timeline_template.html"
+        with open(template_path, 'r') as f:
+            template = f.read()
+
+        # Generate stats
+        date_range = f"{date_from}" + (f" to {date_to}" if date_to and date_to != date_from else "")
+        stats = f"{len(prompts)} prompts on {date_range}"
+
+        # Replace placeholders
+        html = template.replace('{{DATE_RANGE}}', date_range)
+        html = html.replace('{{STATS}}', stats)
+        html = html.replace('{{CURRENT_DATE}}', date_from)
+        html = html.replace('{{PROMPTS_DATA}}', json.dumps(prompts_data))
+
+        # Write output file
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w') as f:
+            f.write(html)
+
+        return output_file
+
+    def close(self):
+        """Close database connection"""
+        self.conn.close()
+
+
+def format_stars(rating: Optional[int]) -> str:
+    """Format rating as stars"""
+    if rating is None:
+        return "☆☆☆☆☆"
+    return "★" * rating + "☆" * (5 - rating)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Prompt Tracker - Manage and rate your prompt history',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  prompt-tracker sync                          # Sync from history.jsonl
+  prompt-tracker list                          # List recent prompts (hides /login, /logout)
+  prompt-tracker list --limit 50               # List 50 prompts
+  prompt-tracker list --min-rating 4           # List 4+ star prompts
+  prompt-tracker list --search "claude"        # Search for prompts
+  prompt-tracker rate 42 5                     # Rate prompt #42 as 5 stars
+  prompt-tracker note 42 "Great example"       # Add note to prompt #42
+  prompt-tracker show 42                       # Show full prompt details
+  prompt-tracker stats                         # Show statistics
+  prompt-tracker publish 42 --tags debugging   # Publish to Memento via UMCP
+  prompt-tracker publish 42 --dry-run          # Preview what would be published
+        """
+    )
+
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+
+    # Sync command
+    sync_parser = subparsers.add_parser('sync', help='Sync prompts from history.jsonl')
+    sync_parser.add_argument('--history', type=Path, default=DEFAULT_HISTORY_PATH,
+                           help='Path to history.jsonl')
+
+    # List command
+    list_parser = subparsers.add_parser('list', help='List prompts')
+    list_parser.add_argument('--limit', type=int, default=20, help='Number of prompts to show')
+    list_parser.add_argument('--min-rating', type=int, choices=[1,2,3,4,5],
+                           help='Filter by minimum rating')
+    list_parser.add_argument('--date-from', help='Filter from date (YYYY-MM-DD)')
+    list_parser.add_argument('--date-to', help='Filter to date (YYYY-MM-DD)')
+    list_parser.add_argument('--search', help='Search in prompt text')
+    list_parser.add_argument('--include-slash-commands', action='store_true',
+                           help='Include /login and /logout commands (hidden by default)')
+
+    # Rate command
+    rate_parser = subparsers.add_parser('rate', help='Rate a prompt')
+    rate_parser.add_argument('prompt_id', type=int, help='Prompt ID')
+    rate_parser.add_argument('rating', type=int, choices=[1,2,3,4,5], help='Rating (1-5 stars)')
+
+    # Note command
+    note_parser = subparsers.add_parser('note', help='Add note to a prompt')
+    note_parser.add_argument('prompt_id', type=int, help='Prompt ID')
+    note_parser.add_argument('text', help='Note text')
+
+    # Show command
+    show_parser = subparsers.add_parser('show', help='Show full prompt details')
+    show_parser.add_argument('prompt_id', type=int, help='Prompt ID')
+
+    # Stats command
+    stats_parser = subparsers.add_parser('stats', help='Show statistics')
+
+    # Publish command
+    publish_parser = subparsers.add_parser('publish', help='Publish prompt to Memento via UMCP')
+    publish_parser.add_argument('prompt_id', type=int, help='Prompt ID')
+    publish_parser.add_argument('--note-id', help='Note ID (auto-generated if not provided)')
+    publish_parser.add_argument('--tags', help='Comma-separated tags')
+    publish_parser.add_argument('--dry-run', action='store_true',
+                              help='Show what would be published without actually publishing')
+
+    # Timeline command
+    timeline_parser = subparsers.add_parser('timeline', help='Generate interactive timeline visualization')
+    timeline_parser.add_argument('date', help='Date or start date (YYYY-MM-DD)')
+    timeline_parser.add_argument('--to', dest='date_to', help='End date for range (YYYY-MM-DD)')
+    timeline_parser.add_argument('--output', type=Path, help='Output HTML file path')
+    timeline_parser.add_argument('--include-slash-commands', action='store_true',
+                                help='Include /login and /logout commands')
+    timeline_parser.add_argument('--no-open', action='store_true',
+                                help='Do not automatically open in browser')
+
+    # DB path option
+    parser.add_argument('--db', type=Path, default=DEFAULT_DB_PATH,
+                       help='Database path')
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    tracker = PromptTracker(args.db)
+
+    try:
+        if args.command == 'sync':
+            count = tracker.sync(args.history)
+            print(f"✓ Synced {count} new prompts")
+
+        elif args.command == 'list':
+            prompts = tracker.list_prompts(
+                limit=args.limit,
+                min_rating=args.min_rating,
+                date_from=args.date_from,
+                date_to=args.date_to,
+                search=args.search,
+                include_slash_commands=args.include_slash_commands
+            )
+
+            if not prompts:
+                print("No prompts found")
+            else:
+                for p in prompts:
+                    dt = datetime.fromtimestamp(p['timestamp'] / 1000)
+                    stars = format_stars(p['rating'])
+
+                    # Truncate display text
+                    display = p['display'][:80]
+                    if len(p['display']) > 80:
+                        display += "..."
+
+                    print(f"[{p['id']:4d}] {stars} {dt.strftime('%Y-%m-%d %H:%M')} - {display}")
+
+                    if p['note']:
+                        print(f"       Note: {p['note']}")
+
+        elif args.command == 'rate':
+            tracker.rate_prompt(args.prompt_id, args.rating)
+            stars = format_stars(args.rating)
+            print(f"✓ Rated prompt #{args.prompt_id} as {stars}")
+
+        elif args.command == 'note':
+            tracker.add_note(args.prompt_id, args.text)
+            print(f"✓ Added note to prompt #{args.prompt_id}")
+
+        elif args.command == 'show':
+            prompt = tracker.get_prompt(args.prompt_id)
+            if not prompt:
+                print(f"Prompt #{args.prompt_id} not found")
+            else:
+                dt = datetime.fromtimestamp(prompt['timestamp'] / 1000)
+                stars = format_stars(prompt['rating'])
+
+                print(f"ID:        {prompt['id']}")
+                print(f"Timestamp: {dt.strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"Rating:    {stars}")
+                print(f"Project:   {prompt['project'] or 'N/A'}")
+                if prompt['note']:
+                    print(f"Note:      {prompt['note']}")
+                print(f"\nPrompt:\n{prompt['display']}")
+
+        elif args.command == 'stats':
+            stats = tracker.stats()
+            print(f"Total prompts: {stats['total']}")
+            print(f"Rated prompts: {stats['rated']}")
+            print(f"Average rating: {stats['avg_rating']:.2f}")
+            print("\nRating distribution:")
+            for row in stats['distribution']:
+                stars = format_stars(row['rating'])
+                bar = "█" * row['count']
+                print(f"  {stars} {row['count']:4d} {bar}")
+
+        elif args.command == 'publish':
+            # Parse tags
+            tags = []
+            if args.tags:
+                tags = [t.strip() for t in args.tags.split(',')]
+
+            # Prepare the note
+            note_data = tracker.publish_to_memento(
+                args.prompt_id,
+                note_id=args.note_id,
+                tags=tags
+            )
+
+            if args.dry_run:
+                print("Dry run - would publish:")
+                print(f"Note ID: {note_data['note_id']}")
+                print(f"Title: {note_data['title']}")
+                print(f"Tags: {', '.join(note_data['tags']) if note_data['tags'] else 'None'}")
+                print(f"\nContent:\n{'-' * 60}")
+                print(note_data['content'])
+                print('-' * 60)
+            else:
+                # Use memento CLI to create the note
+                # Set CLAUDE_CODE=1 to ensure it's treated as AI-created content
+                env = {'CLAUDE_CODE': '1'}
+
+                # Write content to temp file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.org', delete=False) as f:
+                    f.write(note_data['content'])
+                    temp_file = f.name
+
+                try:
+                    # Create note using memento CLI
+                    cmd = [
+                        'memento', 'create',
+                        note_data['note_id'],
+                        '--title', note_data['title'],
+                        '--file', temp_file
+                    ]
+
+                    if note_data['tags']:
+                        cmd.extend(['--tags'] + note_data['tags'])
+
+                    result = subprocess.run(
+                        cmd,
+                        env={**dict(os.environ), **env},
+                        capture_output=True,
+                        text=True
+                    )
+
+                    if result.returncode == 0:
+                        print(f"✓ Published prompt #{args.prompt_id} to memento as '{note_data['note_id']}'")
+                        print(f"  Title: {note_data['title']}")
+                        if note_data['tags']:
+                            print(f"  Tags: {', '.join(note_data['tags'])}")
+                    else:
+                        print(f"✗ Failed to publish to memento:")
+                        print(result.stderr)
+                        sys.exit(1)
+
+                finally:
+                    # Clean up temp file
+                    os.unlink(temp_file)
+
+        elif args.command == 'timeline':
+            output_file = tracker.generate_timeline_html(
+                date_from=args.date,
+                date_to=args.date_to,
+                include_slash_commands=args.include_slash_commands,
+                output_file=args.output
+            )
+
+            print(f"✓ Generated timeline: {output_file}")
+
+            # Open in browser unless --no-open is specified
+            if not args.no_open:
+                import webbrowser
+                webbrowser.open(f'file://{output_file}')
+                print("  Opened in browser")
+
+    finally:
+        tracker.close()
+
+
+if __name__ == '__main__':
+    main()
