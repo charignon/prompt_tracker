@@ -617,25 +617,23 @@
             left: 0;
             width: 100%;
             height: 100%;
-            overflow-y: auto;
-            overflow-x: hidden;
-            pointer-events: auto;
-            scroll-behavior: smooth;
+            overflow: hidden;
+            pointer-events: none;
             z-index: 1;
-            /* reverted padding to avoid layout shift */
         }
 
         .crawl-text {
-            position: relative;
-            margin: 10vh auto 20vh;
-            width: 70%;
-            max-width: 1000px;
-            padding-left: 140px; /* nudge content right away from the clock */
+            position: absolute;
+            bottom: 0%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 1200px;
             font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
-            font-size: 180%;
+            font-size: 280%;
             font-weight: 700;
-            line-height: 1.6;
-            letter-spacing: 2px;
+            line-height: 1.8;
+            letter-spacing: 3px;
             color: #00ff41;
             text-align: center;
             text-shadow:
@@ -645,10 +643,21 @@
                 2px 2px 4px rgba(0, 0, 0, 0.9);
         }
 
-        /* Keyframes kept for legacy auto-crawl, not used in scroll mode */
         @keyframes crawl {
-            0% { opacity: 1; }
-            100% { opacity: 1; }
+            0% {
+                bottom: -10%;
+                transform: translateX(-50%);
+                opacity: 1;
+            }
+            90% {
+                transform: translateX(-50%);
+                opacity: 1;
+            }
+            100% {
+                bottom: 110%;
+                transform: translateX(-50%);
+                opacity: 0;
+            }
         }
 
         .crawl-clock {
@@ -669,17 +678,6 @@
         .crawl-prompt {
             margin-bottom: 120px;
             padding: 40px 0;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .crawl-prompt:hover {
-            transform: scale(1.1);
-            color: #ffff00;
-            text-shadow:
-                0 0 15px rgba(255, 255, 0, 1),
-                0 0 30px rgba(255, 255, 0, 0.7),
-                0 0 45px rgba(255, 255, 0, 0.5);
         }
 
         .crawl-prompt-meta {
@@ -700,40 +698,6 @@
             line-height: 1.5;
             text-transform: none;
         }
-
-        .crawl-prompt.highlighted {
-            background: rgba(255, 255, 0, 0.1);
-            border-left: 4px solid #ffff00;
-            padding-left: 36px;
-        }
-
-        .crawl-prompt-rating {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .crawl-rating-star {
-            font-size: 32px;
-            cursor: pointer;
-            transition: all 0.2s;
-            user-select: none;
-        }
-
-        .crawl-rating-star:hover {
-            transform: scale(1.3);
-            filter: drop-shadow(0 0 10px currentColor);
-        }
-
-        .crawl-rating-star.filled {
-            color: #ffd700;
-        }
-
-        .crawl-rating-star.empty {
-            color: #444;
-        }
-
 
         /* Calendar view styles */
         .calendar-view {
@@ -989,7 +953,7 @@
     <div id="crawl-mode" class="crawl-mode">
         <canvas id="starfield"></canvas>
         <div class="theater-controls">
-            <button class="theater-btn" onclick="exitCrawlMode()">← Back</button>
+            <button class="theater-btn" onclick="exitCrawlMode()">✕ Exit</button>
         </div>
         <div class="crawl-clock" id="crawl-clock"></div>
         <div class="crawl-container">
@@ -2253,70 +2217,53 @@
 
             if (selected.length === 0) return;
 
-            // Store for navigation
-            window.crawlPrompts = selected;
-            window.crawlCurrentIndex = 0;
-
             // Enter crawl mode
             const crawlMode = document.getElementById('crawl-mode');
             crawlMode.classList.add('active');
+            animationRunning = true;
 
             // Start starfield
             initStarfield();
 
-            // Build scrollable list
+            // Start clock
+            updateCrawlClock();
+
+            // Build crawl text
             const crawlText = document.getElementById('crawl-text');
             crawlText.innerHTML = '';
+
+            // Remove animation to reset it
+            crawlText.style.animation = 'none';
 
             selected.forEach((prompt, index) => {
                 const promptDiv = document.createElement('div');
                 promptDiv.className = 'crawl-prompt';
-                promptDiv.dataset.index = index;
-                promptDiv.dataset.promptId = prompt.id;
-
-                const meta = document.createElement('div');
-                meta.className = 'crawl-prompt-meta';
-                const time = new Date(prompt.timestamp).toLocaleTimeString('en-US', { 
-                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false 
-                });
-                meta.textContent = time;
 
                 const text = document.createElement('div');
                 text.className = 'crawl-prompt-text';
                 text.textContent = prompt.display;
 
-                const rating = document.createElement('div');
-                rating.className = 'crawl-prompt-rating';
-                rating.innerHTML = [1,2,3,4,5].map(r => 
-                    `<span class="crawl-rating-star ${prompt.rating >= r ? 'filled' : 'empty'}" 
-                           onclick="rateCrawlPrompt(${prompt.id}, ${r})"
-                           data-rating="${r}">★</span>`
-                ).join('');
-
-                promptDiv.appendChild(meta);
                 promptDiv.appendChild(text);
-                promptDiv.appendChild(rating);
-                
-                promptDiv.onclick = function(e) {
-                    if (!e.target.classList.contains('crawl-rating-star')) {
-                        highlightCrawlPrompt(index);
-                    }
-                };
-
                 crawlText.appendChild(promptDiv);
             });
 
+            // Force reflow to restart animation
+            void crawlText.offsetHeight;
+
+            // Restart animation
+            setTimeout(() => {
+                crawlText.style.animation = 'crawl 120s linear forwards';
+            }, 100);
+
             // Clear selection highlighting
             contentGroup.selectAll('.prompt-dot').classed('selected', false);
-            updateSelectionUI();
 
-            // Highlight the first prompt by default
-            if (window.crawlPrompts && window.crawlPrompts.length > 0) {
-                highlightCrawlPrompt(0);
-            }
-
-            // Sync highlight with mouse scroll position
-            setupCrawlScrollSync();
+            // Auto-exit after animation completes
+            setTimeout(() => {
+                if (animationRunning) {
+                    exitCrawlMode();
+                }
+            }, 125000); // 120s animation + 5s buffer
         }
 
         let starfieldAnimationId;
@@ -2335,56 +2282,6 @@
 
             updateTime();
             crawlClockInterval = setInterval(updateTime, 1000);
-        }
-
-        // Keep track of scroll listener to clean up on exit
-        let crawlScrollListener;
-        let suppressCrawlScroll = false;
-        let crawlSyncTicking = false; // rAF throttle for scroll sync
-
-        function setupCrawlScrollSync() {
-            // Remove any existing listener first
-            const container = document.querySelector('.crawl-container');
-            if (!container) return;
-            if (crawlScrollListener) {
-                container.removeEventListener('scroll', crawlScrollListener);
-            }
-
-            // Compute which prompt is closest to the vertical center on scroll
-            crawlScrollListener = function() {
-                if (!document.getElementById('crawl-mode').classList.contains('active')) return;
-                if (crawlSyncTicking) return;
-                crawlSyncTicking = true;
-                requestAnimationFrame(() => {
-                    crawlSyncTicking = false;
-                    const promptsEls = Array.from(document.querySelectorAll('.crawl-prompt'));
-                    if (promptsEls.length === 0) return;
-
-                    // Use container center instead of window for robustness
-                    const containerRect = container.getBoundingClientRect();
-                    const viewportCenter = containerRect.top + containerRect.height / 2;
-                    let closestIdx = 0;
-                    let closestDist = Infinity;
-
-                    for (let i = 0; i < promptsEls.length; i++) {
-                        const rect = promptsEls[i].getBoundingClientRect();
-                        const elCenter = rect.top + rect.height / 2;
-                        const dist = Math.abs(elCenter - viewportCenter);
-                        if (dist < closestDist) {
-                            closestDist = dist;
-                            closestIdx = i;
-                        }
-                    }
-
-                    if (closestIdx !== window.crawlCurrentIndex) {
-                        suppressCrawlScroll = true;
-                        highlightCrawlPrompt(closestIdx);
-                        suppressCrawlScroll = false;
-                    }
-                });
-            };
-
-            container.addEventListener('scroll', crawlScrollListener, { passive: true });
         }
 
         function initStarfield() {
@@ -2443,86 +2340,6 @@
             animate();
         }
 
-        function renderCrawlClockFor(index) {
-            const clockEl = document.getElementById('crawl-clock');
-            if (!window.crawlPrompts || !window.crawlPrompts[index]) {
-                clockEl.textContent = '';
-                return;
-            }
-            const t = new Date(window.crawlPrompts[index].timestamp);
-            const hours = String(t.getHours()).padStart(2, '0');
-            const minutes = String(t.getMinutes()).padStart(2, '0');
-            const seconds = String(t.getSeconds()).padStart(2, '0');
-            clockEl.textContent = `${hours}:${minutes}:${seconds}`;
-        }
-
-        function highlightCrawlPrompt(index) {
-            window.crawlCurrentIndex = index;
-            document.querySelectorAll('.crawl-prompt').forEach((el, i) => {
-                if (i === index) {
-                    el.classList.add('highlighted');
-                    if (!suppressCrawlScroll) {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                } else {
-                    el.classList.remove('highlighted');
-                }
-            });
-            // Show the highlighted prompt's time on the clock
-            renderCrawlClockFor(index);
-        }
-
-        function rateCrawlPrompt(promptId, rating) {
-            const prompt = prompts.find(p => p.id === promptId);
-            if (!prompt) return;
-
-            // Toggle off if same rating
-            if (prompt.rating === rating) {
-                rating = null;
-            }
-
-            prompt.rating = rating;
-
-            // Update stars in crawl view
-            const promptDiv = document.querySelector(`[data-prompt-id="${promptId}"]`);
-            if (promptDiv) {
-                promptDiv.querySelectorAll('.crawl-rating-star').forEach((star, i) => {
-                    star.className = (rating && i < rating) ? 'crawl-rating-star filled' : 'crawl-rating-star empty';
-                });
-            }
-
-            // Save to localStorage
-            const ratings = JSON.parse(localStorage.getItem('prompt_ratings') || '{}');
-            if (rating === null) {
-                delete ratings[promptId];
-            } else {
-                ratings[promptId] = rating;
-            }
-            localStorage.setItem('prompt_ratings', JSON.stringify(ratings));
-
-            // Update main timeline
-            contentGroup.selectAll('.prompt-dot')
-                .filter(d => d.id === promptId)
-                .attr('class', d => {
-                    const classes = ['prompt-dot'];
-                    if (rating) {
-                        classes.push(`rating-${rating}`);
-                    } else {
-                        classes.push('unrated');
-                    }
-                    return classes.join(' ');
-                });
-        }
-
-        function navigateCrawl(direction) {
-            if (!window.crawlPrompts || window.crawlPrompts.length === 0) return;
-            
-            const newIndex = window.crawlCurrentIndex + direction;
-            if (newIndex >= 0 && newIndex < window.crawlPrompts.length) {
-                highlightCrawlPrompt(newIndex);
-            }
-        }
-
         function exitCrawlMode() {
             animationRunning = false;
             const crawlMode = document.getElementById('crawl-mode');
@@ -2540,13 +2357,6 @@
 
             // Clear crawl text
             document.getElementById('crawl-text').innerHTML = '';
-
-            // Remove scroll sync listener
-            const container = document.querySelector('.crawl-container');
-            if (container && crawlScrollListener) {
-                container.removeEventListener('scroll', crawlScrollListener);
-                crawlScrollListener = undefined;
-            }
 
             // Restore main timeline
             selectedPrompts.clear();
@@ -2590,17 +2400,6 @@
                 animationRunning = false; // Stop automatic animation
                 const direction = e.key === 'ArrowRight' ? 1 : -1;
                 navigateTheaterPrompt(direction);
-            } else if (document.getElementById('crawl-mode').classList.contains('active') && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                // Navigate in crawl mode
-                e.preventDefault();
-                const direction = e.key === 'ArrowDown' ? 1 : -1;
-                navigateCrawl(direction);
-            } else if (document.getElementById('crawl-mode').classList.contains('active') && ['1', '2', '3', '4', '5'].includes(e.key)) {
-                // Rate in crawl mode
-                e.preventDefault();
-                if (window.crawlPrompts && window.crawlPrompts[window.crawlCurrentIndex]) {
-                    rateCrawlPrompt(window.crawlPrompts[window.crawlCurrentIndex].id, parseInt(e.key));
-                }
             } else if (inTheaterMode && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 // Scroll the prompt text in theater mode
                 e.preventDefault();
