@@ -1077,6 +1077,134 @@
         let svg, g, contentGroup, xScale, yScale, zoom, xAxis;
         const margin = {top: 50, right: 40, bottom: 60, left: 150};
 
+        // ===== VIEWPORT STATE MANAGER - Single Source of Truth =====
+        const ViewportState = {
+            transform: null,
+            scrollTop: 0,
+            savedState: null,
+
+            save() {
+                if (!svg) return;
+                const container = document.getElementById('timeline-scroll-container');
+                this.savedState = {
+                    transform: d3.zoomTransform(svg.node()),
+                    scrollTop: container ? container.scrollTop : 0
+                };
+            },
+
+            restore() {
+                if (!this.savedState || !svg) return;
+                const container = document.getElementById('timeline-scroll-container');
+
+                // Apply transform without triggering events
+                svg.node().__zoom = this.savedState.transform;
+                if (container) {
+                    container.scrollTop = this.savedState.scrollTop;
+                }
+
+                // Update visualization with new transform
+                zoomed({ transform: this.savedState.transform });
+            },
+
+            get() {
+                if (!svg) return null;
+                const container = document.getElementById('timeline-scroll-container');
+                return {
+                    transform: d3.zoomTransform(svg.node()),
+                    scrollTop: container ? container.scrollTop : 0
+                };
+            }
+        };
+
+        // ===== MODE MANAGER - Controls Interaction Modes =====
+        const MODES = {
+            NORMAL: 'normal',
+            SELECTION: 'selection',
+            THEATER: 'theater',
+            CRAWL: 'crawl'
+        };
+
+        let currentMode = MODES.NORMAL;
+
+        function setMode(newMode) {
+            if (currentMode === newMode) return;
+
+            // Save viewport before mode change
+            ViewportState.save();
+
+            // Exit current mode
+            switch(currentMode) {
+                case MODES.SELECTION:
+                    disableBrushMode();
+                    break;
+                case MODES.THEATER:
+                case MODES.CRAWL:
+                    // Theater/crawl cleanup handled by their own functions
+                    break;
+            }
+
+            currentMode = newMode;
+
+            // Enter new mode
+            switch(newMode) {
+                case MODES.NORMAL:
+                    enableNormalMode();
+                    break;
+                case MODES.SELECTION:
+                    enableBrushMode();
+                    break;
+                case MODES.THEATER:
+                case MODES.CRAWL:
+                    // Theater/crawl setup handled by their own functions
+                    break;
+            }
+
+            // Restore viewport after mode change
+            ViewportState.restore();
+        }
+
+        function enableNormalMode() {
+            // Normal mode is the default - zoom/pan enabled
+            // Nothing special to do, zoom is always active unless we disable it
+        }
+
+        function enableBrushMode() {
+            if (!svg || !contentGroup) return;
+
+            const container = document.getElementById('timeline-scroll-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            brush = d3.brush()
+                .extent([[0, 0], [innerWidth, innerHeight]])
+                .on('end', brushEnded);
+
+            contentGroup.append('g')
+                .attr('class', 'brush')
+                .call(brush);
+
+            // Disable zoom by removing event listeners (NOT by calling svg.call())
+            svg.on('.zoom', null);
+        }
+
+        function disableBrushMode() {
+            if (!contentGroup) return;
+
+            contentGroup.select('.brush').remove();
+            brush = null;
+
+            // Re-enable zoom by re-attaching to the EXISTING zoom behavior
+            // CRITICAL: Never call svg.call(zoom) again - it's already attached from initTimeline
+            if (zoom) {
+                svg.on('mousedown.zoom', zoom);
+                svg.on('dblclick.zoom', zoom);
+                svg.on('touchstart.zoom', zoom);
+                svg.on('wheel.zoom', zoom);
+            }
+        }
+
         // All prompts loaded at once - no lazy loading
 
         // Group prompts by project
@@ -1693,6 +1821,9 @@
         }
 
         function filterByProject(project) {
+            // Save viewport before filtering
+            ViewportState.save();
+
             // SAFE VERSION: Don't touch viewport at all
             currentProjectFilter = project;
 
@@ -1729,9 +1860,15 @@
                 })
                 .attr('y1', d => yScale(d) + yScale.bandwidth() / 2)
                 .attr('y2', d => yScale(d) + yScale.bandwidth() / 2);
+
+            // Restore viewport after filtering
+            ViewportState.restore();
         }
 
         function refreshTimeline() {
+            // Save viewport before any changes
+            ViewportState.save();
+
             // SAFE VERSION: Only reorder projects, don't touch viewport at all
             const container = document.getElementById('timeline-scroll-container');
             const savedTransform = svg ? d3.zoomTransform(svg.node()) : d3.zoomIdentity;
@@ -1873,6 +2010,9 @@
             contentGroup.selectAll('.track-line')
                 .attr('y1', d => yScale(d) + yScale.bandwidth() / 2)
                 .attr('y2', d => yScale(d) + yScale.bandwidth() / 2);
+
+            // Restore viewport after reordering
+            ViewportState.restore();
         }
 
         function showTooltip(event, d) {
@@ -2008,44 +2148,13 @@
             if (selectionMode) {
                 btn.classList.add('active');
                 btn.textContent = '✓ Selecting';
-                enableBrush();
+                setMode(MODES.SELECTION);
             } else {
                 btn.classList.remove('active');
                 btn.textContent = '⬚ Select';
-                disableBrush();
+                setMode(MODES.NORMAL);
                 clearSelection();
             }
-        }
-
-        function enableBrush() {
-            const container = document.getElementById('timeline-scroll-container');
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            const innerWidth = width - margin.left - margin.right;
-            const innerHeight = height - margin.top - margin.bottom;
-
-            brush = d3.brush()
-                .extent([[0, 0], [innerWidth, innerHeight]])
-                .on('end', brushEnded);
-
-            contentGroup.append('g')
-                .attr('class', 'brush')
-                .call(brush);
-
-            // Disable zoom while brushing by removing all zoom event listeners
-            svg.on('.zoom', null);
-        }
-
-        function disableBrush() {
-            contentGroup.select('.brush').remove();
-            brush = null;
-
-            // CRITICAL: Just re-attach zoom listeners without calling svg.call(zoom)
-            // which would re-initialize and potentially trigger events
-            svg.on('mousedown.zoom', zoom);
-            svg.on('dblclick.zoom', zoom);
-            svg.on('touchstart.zoom', zoom);
-            svg.on('wheel.zoom', zoom);
         }
 
         function brushEnded(event) {
@@ -3052,20 +3161,9 @@
 
         // Handle window resize - preserve viewport
         window.addEventListener('resize', () => {
-            const savedTransform = svg ? d3.zoomTransform(svg.node()) : null;
-            const container = document.getElementById('timeline-scroll-container');
-            const savedScrollTop = container ? container.scrollTop : 0;
-
+            ViewportState.save();
             initTimeline(true); // Skip initial transform
-
-            // Restore viewport
-            if (savedTransform && svg && zoom) {
-                svg.node().__zoom = savedTransform;
-                zoomed({ transform: savedTransform });
-            }
-            if (container) {
-                container.scrollTop = savedScrollTop;
-            }
+            ViewportState.restore();
         });
 
         // Keyboard shortcuts
