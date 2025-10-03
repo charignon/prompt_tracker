@@ -386,6 +386,72 @@ def format_stars(rating: Optional[int]) -> str:
     return "★" * rating + "☆" * (5 - rating)
 
 
+def serve_web_interface(tracker: PromptTracker, port: int = 8080, host: str = '127.0.0.1'):
+    """Start a web server for browsing timelines"""
+    try:
+        from flask import Flask, request, jsonify, redirect
+    except ImportError:
+        print("Error: Flask is required for the web server")
+        print("Install it with: pip install flask")
+        sys.exit(1)
+
+    app = Flask(__name__)
+    app.secret_key = os.urandom(24)
+
+    @app.route('/')
+    def index():
+        """Redirect to today's timeline"""
+        today = datetime.now().strftime('%Y-%m-%d')
+        return redirect(f'/timeline/{today}')
+
+    @app.route('/timeline/<date>')
+    def timeline(date):
+        """Serve timeline for a specific date"""
+        try:
+            # Validate date format
+            datetime.strptime(date, '%Y-%m-%d')
+            html = tracker.generate_timeline_html_content(date)
+
+            # Modify the loadDate function to navigate in the web interface
+            html = html.replace(
+                "alert(`To view ${newDate}, run:\\n\\nprompt-tracker timeline ${newDate}`);",
+                "window.location.href = `/timeline/${newDate}`;"
+            )
+
+            return html
+        except ValueError:
+            return "Invalid date format. Use YYYY-MM-DD", 400
+        except Exception as e:
+            return f"Error generating timeline: {str(e)}", 500
+
+    @app.route('/api/rate', methods=['POST'])
+    def rate_prompt():
+        """API endpoint to rate a prompt"""
+        try:
+            data = request.get_json()
+            prompt_id = data.get('prompt_id')
+            rating = data.get('rating')
+
+            if not prompt_id or not rating:
+                return jsonify({'error': 'Missing prompt_id or rating'}), 400
+
+            if rating not in [1, 2, 3, 4, 5]:
+                return jsonify({'error': 'Rating must be 1-5'}), 400
+
+            tracker.rate_prompt(prompt_id, rating)
+            return jsonify({'success': True, 'message': f'Rated prompt #{prompt_id}'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    print(f"✓ Starting web server at http://{host}:{port}")
+    print(f"  Press Ctrl+C to stop")
+
+    import webbrowser
+    webbrowser.open(f'http://{host}:{port}')
+
+    app.run(host=host, port=port, debug=False)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Prompt Tracker - Manage and rate your prompt history',
@@ -460,6 +526,11 @@ Examples:
                                 help='Include /login and /logout commands')
     timeline_parser.add_argument('--no-open', action='store_true',
                                 help='Do not automatically open in browser')
+
+    # Serve command
+    serve_parser = subparsers.add_parser('serve', help='Start web server for browsing timelines')
+    serve_parser.add_argument('--port', type=int, default=8080, help='Port to run server on (default: 8080)')
+    serve_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
 
     # DB path option
     parser.add_argument('--db', type=Path, default=DEFAULT_DB_PATH,
@@ -638,8 +709,13 @@ Examples:
                 webbrowser.open(f'file://{output_file}')
                 print("  Opened in browser")
 
+        elif args.command == 'serve':
+            serve_web_interface(tracker, port=args.port, host=args.host)
+            return  # Don't close tracker, server keeps it open
+
     finally:
-        tracker.close()
+        if args.command != 'serve':
+            tracker.close()
 
 
 if __name__ == '__main__':

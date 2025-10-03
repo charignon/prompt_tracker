@@ -503,7 +503,6 @@
             // Add zoom behavior
             zoom = d3.zoom()
                 .scaleExtent([0.5, 50])
-                .translateExtent([[0, -innerHeight], [innerWidth, innerHeight * 2]])
                 .on('zoom', zoomed);
 
             svg.call(zoom);
@@ -521,12 +520,12 @@
                 .attr('stroke', '#2a2a2a')
                 .attr('stroke-opacity', 0.3);
 
-            // Add X axis
+            // Add X axis with adaptive ticks
             xAxis = g.append('g')
                 .attr('class', 'axis')
                 .attr('transform', `translate(0,${innerHeight})`)
                 .call(d3.axisBottom(xScale)
-                    .ticks(d3.timeHour.every(1))
+                    .ticks(6)  // D3 will choose appropriate intervals
                     .tickFormat(d3.timeFormat('%H:%M')));
 
             // Add project tracks
