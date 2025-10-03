@@ -1188,8 +1188,9 @@
                 .attr('class', 'brush')
                 .call(brush);
 
-            // Disable zoom by removing event listeners (NOT by calling svg.call())
+            // Disable zoom and drag by removing event listeners
             svg.on('.zoom', null);
+            svg.on('.drag', null);
         }
 
         function disableBrushMode() {
@@ -1198,13 +1199,16 @@
             contentGroup.select('.brush').remove();
             brush = null;
 
-            // Re-enable zoom by re-attaching to the EXISTING zoom behavior
-            // CRITICAL: Never call svg.call(zoom) again - it's already attached from initTimeline
+            // Re-enable zoom and drag by re-attaching event listeners
+            // CRITICAL: Never call svg.call(zoom) or svg.call(drag) again - they're already attached from initTimeline
             if (zoom) {
                 svg.on('mousedown.zoom', zoom);
                 svg.on('dblclick.zoom', zoom);
                 svg.on('touchstart.zoom', zoom);
                 svg.on('wheel.zoom', zoom);
+            }
+            if (drag) {
+                svg.call(drag);  // Re-enable drag behavior
             }
         }
 
