@@ -153,8 +153,7 @@
 
         #timeline-scroll-container {
             flex: 1;
-            position: relative; /* Establish positioning context */
-            overflow: hidden; /* Prevent SVG content from escaping container */
+            overflow: hidden;
             overflow-y: auto;
             overflow-x: hidden;
             background: #1a1a1a;
@@ -169,7 +168,6 @@
             -webkit-user-select: none;
             -moz-user-select: none;
             cursor: grab;
-            overflow: hidden; /* Clip SVG content at bounds */
         }
 
         #timeline-svg:active {
@@ -1287,18 +1285,19 @@
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
             // Add clip path to prevent dots from drawing over axis
-            // Start much higher (y=-100) to accommodate any transforms during panning
+            // Create clip path to prevent dots from rendering into the axis area
             svg.append('defs')
                 .append('clipPath')
                 .attr('id', 'timeline-clip')
                 .append('rect')
                 .attr('x', 0)
-                .attr('y', -100)
+                .attr('y', 0)
                 .attr('width', innerWidth)
-                .attr('height', innerHeight + 100);
+                .attr('height', virtualHeight);
 
-            // Create content group WITHOUT clipping - clipping during transforms causes issues
-            contentGroup = g.append('g');
+            // Create content group WITH clipping to prevent overlap with axis
+            contentGroup = g.append('g')
+                .attr('clip-path', 'url(#timeline-clip)');
 
             // Time scale (X axis) - domain covers all prompts for infinite panning
             const [year, month, day] = currentDate.split('-').map(Number);
@@ -1331,7 +1330,7 @@
             // Update clip path width to match the full range width (not just viewport)
             svg.select('#timeline-clip rect')
                 .attr('width', rangeWidth)
-                .attr('height', virtualHeight + 100);
+                .attr('height', virtualHeight);
 
             // Set initial transform to show from 11pm previous day to 1am next day (26 hour window)
             const prevDay = new Date(dayStart.getTime() - (24 * 60 * 60 * 1000)); // Previous day midnight
@@ -1346,10 +1345,11 @@
             const initialScale = innerWidth / viewWidthInScale; // Scale to fit 26 hours
             const initialX = -viewStartX * initialScale; // Translate to show viewStart at left edge
 
-            // Project scale (Y axis) - already calculated above
+            // Project scale (Y axis) - start at maxDotRadius + buffer to prevent clipping
+            const maxDotRadius = 20; // From radiusScale range
             yScale = d3.scaleBand()
                 .domain(visibleProjects)
-                .range([15, virtualHeight])  // Start 15px below to avoid clipping first project
+                .range([maxDotRadius + 10, virtualHeight])  // Start at 30px (20px max radius + 10px buffer)
                 .padding(0.3);
 
             // State for smooth trackpad interaction
