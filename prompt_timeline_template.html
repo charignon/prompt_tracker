@@ -622,11 +622,32 @@
 
         function zoomed(event) {
             const newXScale = event.transform.rescaleX(xScale);
+            const zoomLevel = event.transform.k;
 
-            // Update axis
+            // Adaptive tick count and format based on zoom level
+            let tickCount, tickFormat;
+            if (zoomLevel < 1) {
+                // Zoomed out: fewer ticks, show hours
+                tickCount = 6;
+                tickFormat = d3.timeFormat('%H:%M');
+            } else if (zoomLevel < 3) {
+                // Normal view: moderate ticks
+                tickCount = 12;
+                tickFormat = d3.timeFormat('%H:%M');
+            } else if (zoomLevel < 10) {
+                // Zoomed in: more ticks, show minutes
+                tickCount = 20;
+                tickFormat = d3.timeFormat('%H:%M');
+            } else {
+                // Very zoomed in: many ticks, show seconds
+                tickCount = 30;
+                tickFormat = d3.timeFormat('%H:%M:%S');
+            }
+
+            // Update axis with adaptive ticks
             xAxis.call(d3.axisBottom(newXScale)
-                .ticks(d3.timeHour.every(1))
-                .tickFormat(d3.timeFormat('%H:%M')));
+                .ticks(tickCount)
+                .tickFormat(tickFormat));
 
             // Update dots
             g.selectAll('.prompt-dot')
