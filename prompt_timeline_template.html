@@ -1326,6 +1326,11 @@
                 .domain([minTime, maxTime])
                 .range([0, rangeWidth]);
 
+            // Update clip path width to match the full range width (not just viewport)
+            svg.select('#timeline-clip rect')
+                .attr('width', rangeWidth)
+                .attr('height', virtualHeight + 20);
+
             // Set initial transform to show from 11pm previous day to 1am next day (26 hour window)
             const prevDay = new Date(dayStart.getTime() - (24 * 60 * 60 * 1000)); // Previous day midnight
             const viewStart = new Date(prevDay.getTime() + (23 * 60 * 60 * 1000)); // 11pm previous day
@@ -1344,10 +1349,6 @@
                 .domain(visibleProjects)
                 .range([15, virtualHeight])  // Start 15px below to avoid clipping first project
                 .padding(0.3);
-
-            // Update the clipped area height to match virtual height
-            svg.select('#timeline-clip rect')
-                .attr('height', virtualHeight);
 
             // State for smooth trackpad interaction
             let currentTransform = d3.zoomIdentity;
