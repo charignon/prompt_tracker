@@ -1284,15 +1284,15 @@
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
             // Add clip path to prevent dots from drawing over axis
-            // Start at y=-20 to accommodate yScale starting at 15px and dot radius
+            // Start much higher (y=-100) to accommodate any transforms during panning
             svg.append('defs')
                 .append('clipPath')
                 .attr('id', 'timeline-clip')
                 .append('rect')
                 .attr('x', 0)
-                .attr('y', -20)
+                .attr('y', -100)
                 .attr('width', innerWidth)
-                .attr('height', innerHeight + 20);
+                .attr('height', innerHeight + 100);
 
             // Create a clipped group for content
             contentGroup = g.append('g')
@@ -1329,7 +1329,7 @@
             // Update clip path width to match the full range width (not just viewport)
             svg.select('#timeline-clip rect')
                 .attr('width', rangeWidth)
-                .attr('height', virtualHeight + 20);
+                .attr('height', virtualHeight + 100);
 
             // Set initial transform to show from 11pm previous day to 1am next day (26 hour window)
             const prevDay = new Date(dayStart.getTime() - (24 * 60 * 60 * 1000)); // Previous day midnight
