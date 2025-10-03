@@ -6,7 +6,7 @@ Prompt Tracker - CLI tool for managing and rating prompts from history.jsonl
 import sqlite3
 import json
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict
 import sys
@@ -339,6 +339,41 @@ class PromptTracker:
 
         return output_file
 
+    def generate_timeline_html_content(self, date_from: str, date_to: Optional[str] = None,
+                                      include_slash_commands: bool = False) -> str:
+        """Generate HTML timeline content (without writing to file)"""
+        # Get prompts for the date range
+        prompts = self.get_prompts_by_date(date_from, date_to, include_slash_commands)
+
+        # Prepare data for JavaScript
+        prompts_data = []
+        for p in prompts:
+            prompts_data.append({
+                'id': p['id'],
+                'timestamp': p['timestamp'],
+                'display': p['display'],
+                'project': p['project'],
+                'rating': p['rating'],
+                'note': p['note']
+            })
+
+        # Read template
+        template_path = Path(__file__).parent / "prompt_timeline_template.html"
+        with open(template_path, 'r') as f:
+            template = f.read()
+
+        # Generate stats
+        date_range = f"{date_from}" + (f" to {date_to}" if date_to and date_to != date_from else "")
+        stats = f"{len(prompts)} prompts on {date_range}"
+
+        # Replace placeholders
+        html = template.replace('{{DATE_RANGE}}', date_range)
+        html = html.replace('{{STATS}}', stats)
+        html = html.replace('{{CURRENT_DATE}}', date_from)
+        html = html.replace('{{PROMPTS_DATA}}', json.dumps(prompts_data))
+
+        return html
+
     def close(self):
         """Close database connection"""
         self.conn.close()
@@ -388,6 +423,8 @@ Examples:
     list_parser.add_argument('--search', help='Search in prompt text')
     list_parser.add_argument('--include-slash-commands', action='store_true',
                            help='Include /login and /logout commands (hidden by default)')
+    list_parser.add_argument('--format', choices=['text', 'json'], default='text',
+                           help='Output format (text or json)')
 
     # Rate command
     rate_parser = subparsers.add_parser('rate', help='Rate a prompt')
@@ -452,21 +489,38 @@ Examples:
             )
 
             if not prompts:
-                print("No prompts found")
+                if args.format == 'json':
+                    print('[]')
+                else:
+                    print("No prompts found")
             else:
-                for p in prompts:
-                    dt = datetime.fromtimestamp(p['timestamp'] / 1000)
-                    stars = format_stars(p['rating'])
+                if args.format == 'json':
+                    # Convert sqlite3.Row objects to dicts
+                    prompts_list = []
+                    for p in prompts:
+                        prompts_list.append({
+                            'id': p['id'],
+                            'timestamp': p['timestamp'],
+                            'display': p['display'],
+                            'project': p['project'],
+                            'rating': p['rating'],
+                            'note': p['note']
+                        })
+                    print(json.dumps(prompts_list))
+                else:
+                    for p in prompts:
+                        dt = datetime.fromtimestamp(p['timestamp'] / 1000)
+                        stars = format_stars(p['rating'])
 
-                    # Truncate display text
-                    display = p['display'][:80]
-                    if len(p['display']) > 80:
-                        display += "..."
+                        # Truncate display text
+                        display = p['display'][:80]
+                        if len(p['display']) > 80:
+                            display += "..."
 
-                    print(f"[{p['id']:4d}] {stars} {dt.strftime('%Y-%m-%d %H:%M')} - {display}")
+                        print(f"[{p['id']:4d}] {stars} {dt.strftime('%Y-%m-%d %H:%M')} - {display}")
 
-                    if p['note']:
-                        print(f"       Note: {p['note']}")
+                        if p['note']:
+                            print(f"       Note: {p['note']}")
 
         elif args.command == 'rate':
             tracker.rate_prompt(args.prompt_id, args.rating)

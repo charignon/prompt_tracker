@@ -503,7 +503,7 @@
             // Add zoom behavior
             zoom = d3.zoom()
                 .scaleExtent([0.5, 50])
-                .translateExtent([[-innerWidth, -innerHeight], [innerWidth * 2, innerHeight * 2]])
+                .translateExtent([[0, -innerHeight], [innerWidth, innerHeight * 2]])
                 .on('zoom', zoomed);
 
             svg.call(zoom);
