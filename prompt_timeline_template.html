@@ -39,10 +39,13 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
+            flex-wrap: nowrap;
         }
 
         h1 {
             font-size: 24px;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         #stats {
@@ -55,12 +58,17 @@
             display: flex;
             gap: 8px;
             align-items: center;
+            flex-wrap: nowrap;
+            flex-shrink: 1;
+            min-width: 0;
         }
 
         .control-group {
             display: flex;
             gap: 4px;
             align-items: center;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .actions-group {
@@ -143,12 +151,26 @@
             border-color: #666;
         }
 
-        #timeline-svg {
+        #timeline-scroll-container {
             flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #1a1a1a;
+            -webkit-overflow-scrolling: touch; /* Smooth momentum scrolling on iOS/Safari */
+            scroll-behavior: smooth;
+        }
+
+        #timeline-svg {
+            display: block;
             background: #1a1a1a;
             user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
+            cursor: grab;
+        }
+
+        #timeline-svg:active {
+            cursor: grabbing;
         }
 
         .track-line {
@@ -361,10 +383,11 @@
             position: absolute;
             background: #2a2a2a;
             border: 1px solid #444;
-            padding: 8px 12px;
+            padding: 10px 14px;
             border-radius: 4px;
             font-size: 13px;
-            max-width: 300px;
+            max-width: 250px;
+            max-height: 320px;
             pointer-events: none;
             z-index: 1000;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -375,11 +398,17 @@
         .tooltip-time {
             color: #888;
             font-size: 11px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
         .tooltip-text {
             color: #e0e0e0;
+            line-height: 1.5;
+            max-height: 280px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 13;
+            -webkit-box-orient: vertical;
         }
 
         .zoom-help {
@@ -908,6 +937,10 @@
                         <button class="date-nav-btn" onclick="changeDate(1)" title="Next day">→</button>
                     </div>
                     <div class="control-group">
+                        <span class="control-label" style="color: #888;">Viewing:</span>
+                        <span id="visible-range-display" style="color: #aaa; font-size: 12px; font-family: monospace; white-space: nowrap;">Loading...</span>
+                    </div>
+                    <div class="control-group">
                         <span class="control-label">Project:</span>
                         <select id="project-filter" onchange="filterByProject(this.value)">
                             <option value="">All Projects</option>
@@ -919,8 +952,12 @@
                         <span id="zoom-level-display">100%</span>
                         <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
                     </div>
+                    <button class="zoom-btn" id="reorder-btn" onclick="refreshTimeline()" title="Reorder projects by activity in visible range">
+                        🔄 Reorder
+                        <span id="hidden-projects-badge" style="display: none; margin-left: 4px; background: #f97316; color: white; border-radius: 10px; padding: 2px 6px; font-size: 10px; font-weight: bold;"></span>
+                    </button>
+                    <button class="zoom-btn" id="select-btn" onclick="toggleSelection()" title="Select prompts (drag to select) • Press S">⬚ Select</button>
                     <div class="actions-group">
-                        <button class="zoom-btn" id="select-btn" onclick="toggleSelection()" title="Select prompts (drag to select)">⬚ Select</button>
                         <button class="zoom-btn" id="export-btn" onclick="exportSelected()" title="Export selected to CSV" style="display:none;">📥 CSV</button>
                         <button class="zoom-btn" id="animate-theater-btn" onclick="animateTheater()" title="Theater mode - 2 minute animation" style="display:none;">🎬 Theater</button>
                         <button class="zoom-btn" id="animate-10x-btn" onclick="animate10x()" title="Quick preview - 10x speed" style="display:none;">▶ 10x</button>
@@ -930,7 +967,7 @@
                 </div>
             </div>
             <div id="stats">{{STATS}}</div>
-            <div class="zoom-help">Scroll to zoom • Drag to pan • Click dots for details • Keys: S (select) = (zoom in) - (zoom out)</div>
+            <div class="zoom-help">Vertical scroll through projects • Click and drag to pan • Pinch to zoom • Click dots for details • Keys: S (select) = (zoom in) - (zoom out)</div>
             <div class="legend">
                 <div class="legend-item">
                     <div class="legend-dot" style="background: #27ae60"></div>
@@ -950,7 +987,9 @@
                 </div>
             </div>
         </div>
-        <svg id="timeline-svg"></svg>
+        <div id="timeline-scroll-container">
+            <svg id="timeline-svg"></svg>
+        </div>
     </div>
 
     <div id="side-panel">
@@ -966,9 +1005,9 @@
     <div class="tooltip-d3" id="tooltip"></div>
     <div id="save-status" class="save-status">Rating saved ✓</div>
 
-    <div id="theater-mode" class="theater-mode">
+    <div id="theater-mode" class="theater-mode" onclick="event.target.id === 'theater-mode' && exitTheaterMode()">
         <div class="theater-controls">
-            <button class="theater-btn" onclick="exitTheaterMode()">✕ Exit</button>
+            <button class="theater-btn" onclick="exitTheaterMode()">← Go Back</button>
         </div>
         <div class="theater-prompt-display" id="theater-prompt">
             <div class="theater-prompt-time" id="theater-time"></div>
@@ -1036,6 +1075,8 @@
         let svg, g, contentGroup, xScale, yScale, zoom, xAxis;
         const margin = {top: 40, right: 40, bottom: 60, left: 80};
 
+        // All prompts loaded at once - no lazy loading
+
         // Group prompts by project
         const projectGroups = {};
         const projectColors = {};
@@ -1050,27 +1091,63 @@
             projectGroups[project].push(p);
         });
 
-        const projects = Object.keys(projectGroups).sort();
+        const allProjects = Object.keys(projectGroups).sort();
+
+        // Show all projects (no automatic filtering)
+        const projectCounts = allProjects.map(project => ({
+            project: project,
+            count: projectGroups[project].length
+        }));
+        projectCounts.sort((a, b) => {
+            if (b.count !== a.count) return b.count - a.count;
+            return a.project.localeCompare(b.project);
+        });
+
+        // Auto-select top 15 projects by prompt count (most to least)
+        let projects = projectCounts.slice(0, 15).map(pc => pc.project);
+        let isFiltered = false;
 
         // Populate project filter
         const projectFilter = document.getElementById('project-filter');
-        projects.forEach(project => {
-            const option = document.createElement('option');
-            option.value = project;
-            const shortName = project.split('/').pop() || project;
-            option.textContent = shortName;
-            option.title = project; // Show full path on hover
-            projectFilter.appendChild(option);
-        });
 
-        function initTimeline() {
-            const container = document.getElementById('timeline-svg');
+        function populateProjectFilter() {
+            projectFilter.innerHTML = '<option value="">All Projects</option>';
+            projects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project;
+                const shortName = project.split('/').pop() || project;
+                option.textContent = shortName;
+                option.title = project; // Show full path on hover
+                projectFilter.appendChild(option);
+            });
+        }
+
+        populateProjectFilter();
+
+        function initTimeline(skipInitialTransform = false) {
+            const container = document.getElementById('timeline-scroll-container');
             const width = container.clientWidth;
             const height = container.clientHeight;
 
+            // Calculate dimensions first to get virtualHeight
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            const visibleProjects = currentProjectFilter ?
+                [currentProjectFilter] : projects;
+
+            // Dynamic spacing: use full viewport height, with minimum spacing for many projects
+            const minProjectHeight = 35; // Minimum height for 15 projects
+            const maxProjectHeight = innerHeight / Math.max(1, visibleProjects.length); // Fill viewport
+            const projectHeight = Math.max(minProjectHeight, maxProjectHeight);
+            const virtualHeight = visibleProjects.length * projectHeight;
+
+            // Set SVG to virtual height to enable scrolling
+            const svgHeight = Math.max(virtualHeight + margin.top + margin.bottom, height);
+
             svg = d3.select('#timeline-svg')
                 .attr('width', width)
-                .attr('height', height);
+                .attr('height', svgHeight);
 
             // Clear any existing content
             svg.selectAll('*').remove();
@@ -1078,9 +1155,6 @@
             // Create main group with margins
             g = svg.append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
-
-            const innerWidth = width - margin.left - margin.right;
-            const innerHeight = height - margin.top - margin.bottom;
 
             // Add clip path to prevent dots from drawing over axis
             svg.append('defs')
@@ -1096,105 +1170,179 @@
             contentGroup = g.append('g')
                 .attr('clip-path', 'url(#timeline-clip)');
 
-            // Time scale (X axis) - parse date in local timezone
+            // Time scale (X axis) - domain covers all prompts for infinite panning
             const [year, month, day] = currentDate.split('-').map(Number);
             const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-            const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+            // Calculate domain from all prompts data
+            let minTime, maxTime;
+            if (prompts.length > 0) {
+                const timestamps = prompts.map(p => p.timestamp);
+                minTime = new Date(Math.min(...timestamps));
+                maxTime = new Date(Math.max(...timestamps));
+                // Add 1 day buffer on each side
+                minTime = new Date(minTime.getTime() - (24 * 60 * 60 * 1000));
+                maxTime = new Date(maxTime.getTime() + (24 * 60 * 60 * 1000));
+            } else {
+                // Fallback if no prompts
+                minTime = new Date(dayStart.getTime() - (7 * 24 * 60 * 60 * 1000));
+                maxTime = new Date(dayStart.getTime() + (1 * 24 * 60 * 60 * 1000));
+            }
+
+            // Calculate range width based on time span
+            const timeSpan = maxTime.getTime() - minTime.getTime();
+            const daySpan = timeSpan / (24 * 60 * 60 * 1000);
+            const rangeWidth = innerWidth * Math.max(2, daySpan / 3); // At least 2x screen width
 
             xScale = d3.scaleTime()
-                .domain([dayStart, dayEnd])
-                .range([0, innerWidth]);
+                .domain([minTime, maxTime])
+                .range([0, rangeWidth]);
 
-            // Project scale (Y axis)
-            const visibleProjects = currentProjectFilter ?
-                [currentProjectFilter] : projects;
+            // Set initial transform to show from 11pm previous day to 1am next day (26 hour window)
+            const prevDay = new Date(dayStart.getTime() - (24 * 60 * 60 * 1000)); // Previous day midnight
+            const viewStart = new Date(prevDay.getTime() + (23 * 60 * 60 * 1000)); // 11pm previous day
+            const viewEnd = new Date(dayStart.getTime() + (25 * 60 * 60 * 1000)); // 1am next day (25 hours after current day midnight)
 
+            // Calculate scale to fit 26 hours in viewport
+            const viewDuration = viewEnd.getTime() - viewStart.getTime(); // 26 hours in ms
+            const viewStartX = xScale(viewStart);
+            const viewEndX = xScale(viewEnd);
+            const viewWidthInScale = viewEndX - viewStartX;
+            const initialScale = innerWidth / viewWidthInScale; // Scale to fit 26 hours
+            const initialX = -viewStartX * initialScale; // Translate to show viewStart at left edge
+
+            // Project scale (Y axis) - already calculated above
             yScale = d3.scaleBand()
                 .domain(visibleProjects)
-                .range([0, innerHeight])
+                .range([0, virtualHeight])
                 .padding(0.3);
 
-            // Add zoom behavior with smooth trackpad support
+            // Update the clipped area height to match virtual height
+            svg.select('#timeline-clip rect')
+                .attr('height', virtualHeight);
+
+            // State for smooth trackpad interaction
+            let currentTransform = d3.zoomIdentity;
+
+            // Add zoom behavior for pinch-to-zoom and Ctrl+horizontal panning
             zoom = d3.zoom()
                 .scaleExtent([0.5, 100])
+                .filter(function(event) {
+                    if (event.type === 'wheel') {
+                        // Allow wheel events for zoom and panning
+                        return true;
+                    }
+                    // Allow programmatic zoom
+                    return !event.sourceEvent;
+                })
                 .wheelDelta(function(event) {
-                    // Check if primarily horizontal scroll (two-finger left/right)
-                    const absX = Math.abs(event.deltaX);
-                    const absY = Math.abs(event.deltaY);
-
-                    // If horizontal movement is dominant, don't zoom (let it pan)
-                    if (absX > absY * 1.5) {
+                    // Custom wheel delta to handle Ctrl+horizontal scroll as panning
+                    if (event.ctrlKey && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                        // Ctrl+horizontal scroll: pan only, no zoom
+                        // Return 0 for scale to prevent zooming
                         return 0;
                     }
-
-                    // Non-linear zoom: faster movements zoom faster
-                    let delta = -event.deltaY;
-
-                    // Normalize based on deltaMode
-                    if (event.deltaMode === 1) {
-                        delta *= 50; // line mode
-                    } else if (event.deltaMode === 2) {
-                        delta *= 800; // page mode
+                    // Default zoom behavior - 3x faster for better responsiveness
+                    return -event.deltaY * (event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002) * 3;
+                })
+                .on('zoom', function(event) {
+                    // Handle Ctrl+horizontal scroll as panning
+                    if (event.sourceEvent && event.sourceEvent.type === 'wheel' &&
+                        event.sourceEvent.ctrlKey && Math.abs(event.sourceEvent.deltaX) > Math.abs(event.sourceEvent.deltaY)) {
+                        // Manual pan from horizontal deltaX
+                        const panAmount = -event.sourceEvent.deltaX * 2; // Scale for smooth panning
+                        currentTransform = d3.zoomIdentity
+                            .translate(currentTransform.x + panAmount, 0)
+                            .scale(currentTransform.k);
+                    } else {
+                        // Normal zoom/pan behavior
+                        currentTransform = d3.zoomIdentity
+                            .translate(event.transform.x, 0)
+                            .scale(event.transform.k);
                     }
+                    zoomed({ transform: currentTransform });
+                });
 
-                    // Apply non-linear scaling based on speed
-                    const absDelta = Math.abs(delta);
-                    const sign = delta < 0 ? -1 : 1;
-
-                    // Power function: small movements are precise, large movements zoom fast
-                    // Using power of 1.5 for balanced acceleration
-                    const scaledDelta = sign * Math.pow(absDelta, 1.5) * 0.0025;
-
-                    return scaledDelta;
-                })
+            // Add drag behavior for panning - works great with trackpad!
+            const drag = d3.drag()
                 .filter(function(event) {
-                    // Allow zoom on wheel, pinch, and prevent default double-click zoom
-                    return (!event.ctrlKey || event.type === 'wheel') && !event.button;
+                    // Allow all mouse/touch drag events
+                    return !event.ctrlKey && event.button !== 2;
                 })
-                .on('zoom', zoomed);
+                .on('start', function(event) {
+                    // Store starting position
+                    this.dragStart = { x: event.x, transformX: currentTransform.x };
+                })
+                .on('drag', function(event) {
+                    if (!this.dragStart) return;
 
+                    // Calculate pan amount
+                    const dx = event.x - this.dragStart.x;
+                    const newX = this.dragStart.transformX + dx;
+
+                    // Apply constraints
+                    const maxPan = innerWidth * 0.1;
+                    const contentWidth = innerWidth * currentTransform.k;
+                    const minPan = innerWidth - contentWidth - (innerWidth * 0.1);
+                    const constrainedX = Math.max(minPan, Math.min(maxPan, newX));
+
+                    currentTransform = d3.zoomIdentity
+                        .translate(constrainedX, 0)
+                        .scale(currentTransform.k);
+
+                    // Apply transform immediately
+                    zoomed({ transform: currentTransform });
+                })
+                .on('end', function(event) {
+                    delete this.dragStart;
+                });
+
+            // Apply zoom and drag
             svg.call(zoom);
+            svg.call(drag);
 
-            // Add custom wheel handler for horizontal panning (two-finger left/right scroll)
-            svg.on('wheel.pan', function(event) {
-                const absX = Math.abs(event.deltaX);
-                const absY = Math.abs(event.deltaY);
-
-                // If horizontal movement is dominant, pan horizontally
-                if (absX > absY * 1.5) {
-                    event.preventDefault();
-
-                    // Get current transform
-                    const transform = d3.zoomTransform(svg.node());
-
-                    // Calculate pan amount with non-linear scaling
-                    const absDeltaX = Math.abs(event.deltaX);
-                    const sign = event.deltaX < 0 ? 1 : -1;
-                    const scaledPan = sign * Math.pow(absDeltaX, 1.2) * 0.5;
-
-                    // Apply pan
-                    const newTransform = transform.translate(scaledPan, 0);
-                    svg.transition()
-                        .duration(0)
-                        .call(zoom.transform, newTransform);
-                }
-            }, { passive: false });
-
-            // Add grid lines for each hour (inside clipped area)
+            // Add grid lines for all hours in the wide domain (inside clipped area)
             const gridGroup = contentGroup.append('g')
                 .attr('class', 'grid');
 
-            for (let hour = 0; hour < 24; hour++) {
-                const hourDate = new Date(year, month - 1, day, hour, 0, 0);
+            // Create grid lines for entire time domain
+            const gridStartDate = new Date(minTime);
+            const gridEndDate = new Date(maxTime);
+
+            // Generate hourly grid lines for entire range
+            let currentGridDate = new Date(gridStartDate);
+            currentGridDate.setMinutes(0, 0, 0); // Start at hour boundary
+
+            while (currentGridDate <= gridEndDate) {
+                const isToday = currentGridDate.toDateString() === new Date(year, month - 1, day).toDateString();
+                const isMidnight = currentGridDate.getHours() === 0;
+
                 gridGroup.append('line')
-                    .attr('data-hour', hour)
-                    .attr('x1', xScale(hourDate))
-                    .attr('x2', xScale(hourDate))
+                    .attr('data-timestamp', currentGridDate.getTime())
+                    .attr('x1', xScale(currentGridDate))
+                    .attr('x2', xScale(currentGridDate))
                     .attr('y1', 0)
-                    .attr('y2', innerHeight)
-                    .attr('stroke', '#2a2a2a')
-                    .attr('stroke-opacity', 0.3);
+                    .attr('y2', virtualHeight)
+                    .attr('stroke', isMidnight ? '#ffffff' : '#2a2a2a')
+                    .attr('stroke-opacity', isMidnight ? 0.9 : (isToday ? 0.3 : 0.2))
+                    .attr('stroke-width', isMidnight ? 2 : 1)
+                    .attr('stroke-dasharray', isMidnight ? '5,5' : null);
+
+                currentGridDate.setHours(currentGridDate.getHours() + 1);
             }
+
+            // Add "now" line (current time indicator) inside clipped area - RED
+            const now = new Date();
+            const nowLine = contentGroup.append('line')
+                .attr('class', 'now-line')
+                .attr('x1', xScale(now))
+                .attr('x2', xScale(now))
+                .attr('y1', 0)
+                .attr('y2', virtualHeight)
+                .attr('stroke', '#ff4444')
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 0.8)
+                .attr('stroke-dasharray', '5,5');
 
             // Add X axis with time ticks (outside clipped area)
             xAxis = g.append('g')
@@ -1218,23 +1366,43 @@
                     .attr('stroke', projectColors[project])
                     .attr('stroke-opacity', 0.3);
 
-                // Track label (outside clipped area for visibility)
-                const label = g.append('text')
-                    .attr('class', 'track-label')
-                    .attr('x', -10)
-                    .attr('y', y)
-                    .attr('text-anchor', 'end')
-                    .attr('dominant-baseline', 'middle')
-                    .text(project.split('/').pop() || project);
+                // Track label (outside clipped area for visibility) - use foreignObject for text wrapping
+                const labelText = project.split('/').pop() || project;
+                const labelWidth = 120; // Width for label area
+                const labelHeight = yScale.bandwidth();
 
-                // Add hover tooltip with full path
-                label.append('title')
-                    .text(project);
+                const labelGroup = g.append('foreignObject')
+                    .attr('x', -labelWidth - 5)
+                    .attr('y', y - labelHeight / 2)
+                    .attr('width', labelWidth)
+                    .attr('height', labelHeight)
+                    .append('xhtml:div')
+                    .style('width', '100%')
+                    .style('height', '100%')
+                    .style('display', 'flex')
+                    .style('align-items', 'center')
+                    .style('justify-content', 'flex-end')
+                    .style('font-size', '11px')
+                    .style('font-family', 'monospace')
+                    .style('color', '#666')
+                    .style('text-align', 'right')
+                    .style('line-height', '1.2')
+                    .style('word-break', 'break-word')
+                    .style('overflow', 'hidden')
+                    .attr('title', project)
+                    .text(labelText);
             });
 
             // Add prompts
             renderPrompts();
             updateZoomDisplay();
+            updateHiddenProjectsBadge();
+
+            // Set initial position to show 26-hour window (11pm yesterday to 1am today)
+            // Only apply if not skipping (i.e., on first load, not when reordering)
+            if (!skipInitialTransform) {
+                svg.call(zoom.transform, d3.zoomIdentity.translate(initialX, 0).scale(initialScale));
+            }
         }
 
         function renderPrompts() {
@@ -1306,8 +1474,13 @@
         }
 
         function zoomed(event) {
-            const newXScale = event.transform.rescaleX(xScale);
-            const zoomLevel = event.transform.k;
+            // Only apply X-axis transform (horizontal zoom/pan)
+            const transform = d3.zoomIdentity
+                .translate(event.transform.x, 0)
+                .scale(event.transform.k);
+
+            const newXScale = transform.rescaleX(xScale);
+            const zoomLevel = transform.k;
 
             // Adaptive tick interval and format based on zoom level
             let tickInterval, tickFormat;
@@ -1342,35 +1515,58 @@
                 .ticks(tickInterval)
                 .tickFormat(tickFormat));
 
-            // Update dots
+            // Update dots X position only
             contentGroup.selectAll('.prompt-dot')
                 .attr('cx', d => newXScale(new Date(d.timestamp)));
 
-            // Update grid lines
-            const [year, month, day] = currentDate.split('-').map(Number);
+            // Update now line X position
+            const now = new Date();
+            contentGroup.selectAll('.now-line')
+                .attr('x1', newXScale(now))
+                .attr('x2', newXScale(now));
+
+            // Update grid lines X position using stored timestamps
             contentGroup.selectAll('.grid line')
                 .attr('x1', function() {
-                    const hour = parseInt(d3.select(this).attr('data-hour') || '0');
-                    const hourDate = new Date(year, month - 1, day, hour, 0, 0);
-                    return newXScale(hourDate);
+                    const timestamp = parseInt(d3.select(this).attr('data-timestamp'));
+                    return newXScale(new Date(timestamp));
                 })
                 .attr('x2', function() {
-                    const hour = parseInt(d3.select(this).attr('data-hour') || '0');
-                    const hourDate = new Date(year, month - 1, day, hour, 0, 0);
-                    return newXScale(hourDate);
+                    const timestamp = parseInt(d3.select(this).attr('data-timestamp'));
+                    return newXScale(new Date(timestamp));
                 });
 
-            // Update track lines
+            // Update track lines X position
             contentGroup.selectAll('.track-line')
+                .attr('x1', 0)
                 .attr('x2', function() {
-                    const container = document.getElementById('timeline-svg');
+                    const container = document.getElementById('timeline-scroll-container');
                     const width = container.clientWidth;
                     return width - margin.left - margin.right;
                 });
 
             // Update zoom display
-            const zoomPercent = Math.round(event.transform.k * 100);
+            const zoomPercent = Math.round(zoomLevel * 100);
             document.getElementById('zoom-level-display').textContent = zoomPercent + '%';
+
+            // Update visible range display - compact format on one line
+            // Calculate what's actually visible in the viewport (0 to innerWidth)
+            const container = document.getElementById('timeline-scroll-container');
+            const viewportWidth = container.clientWidth - margin.left - margin.right;
+            const startDate = newXScale.invert(0);
+            const endDate = newXScale.invert(viewportWidth);
+
+            // Format: "Oct 1 05:57 → Oct 9 20:50" - compact, always one line
+            const formatCompact = (date) => {
+                const month = date.toLocaleDateString('en-US', { month: 'short' });
+                const day = date.getDate();
+                const hours = String(date.getHours()).padStart(2, '0');
+                const mins = String(date.getMinutes()).padStart(2, '0');
+                return `${month} ${day} ${hours}:${mins}`;
+            };
+
+            const rangeText = `${formatCompact(startDate)} → ${formatCompact(endDate)}`;
+            document.getElementById('visible-range-display').textContent = rangeText;
         }
 
         function zoomIn() {
@@ -1391,16 +1587,115 @@
             document.getElementById('zoom-level-display').textContent = zoomPercent + '%';
         }
 
+        function updateHiddenProjectsBadge() {
+            // Count total projects with prompts vs displayed projects
+            const totalProjects = Object.keys(projectGroups).length;
+            const displayedProjects = projects.length;
+            const hiddenCount = totalProjects - displayedProjects;
+
+            const badge = document.getElementById('hidden-projects-badge');
+            if (hiddenCount > 0) {
+                badge.textContent = `+${hiddenCount}`;
+                badge.style.display = 'inline';
+                badge.title = `${hiddenCount} more project${hiddenCount > 1 ? 's' : ''} not shown - click Reorder to see them`;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
         function filterByProject(project) {
+            // Save current viewport position
+            const container = document.getElementById('timeline-scroll-container');
+            const savedScrollTop = container.scrollTop;
+            const savedTransform = svg ? d3.zoomTransform(svg.node()) : d3.zoomIdentity;
+
             currentProjectFilter = project;
-            initTimeline();
+            initTimeline(true); // Skip initial transform
+
+            // Restore viewport position
+            if (svg && zoom) {
+                svg.call(zoom.transform, savedTransform);
+            }
+            container.scrollTop = savedScrollTop;
+        }
+
+        function refreshTimeline() {
+            // Save current position and zoom
+            const container = document.getElementById('timeline-scroll-container');
+            const savedScrollTop = container.scrollTop;
+            const savedTransform = svg ? d3.zoomTransform(svg.node()) : d3.zoomIdentity;
+
+            // Get visible time range from current viewport
+            const currentXScale = savedTransform.rescaleX(xScale);
+            const viewportWidth = container.clientWidth - margin.left - margin.right;
+            const visibleStartDate = currentXScale.invert(0);
+            const visibleEndDate = currentXScale.invert(viewportWidth);
+            const visibleStartTs = visibleStartDate.getTime();
+            const visibleEndTs = visibleEndDate.getTime();
+
+            // Filter prompts to visible time range
+            const visiblePrompts = prompts.filter(p =>
+                p.timestamp >= visibleStartTs && p.timestamp <= visibleEndTs
+            );
+
+            // Group by project for visible prompts only
+            const visibleProjectGroups = {};
+            visiblePrompts.forEach(prompt => {
+                const project = prompt.project || 'unknown';
+                if (!visibleProjectGroups[project]) {
+                    visibleProjectGroups[project] = [];
+                }
+                visibleProjectGroups[project].push(prompt);
+            });
+
+            // Get top 15 projects by count in visible range
+            const visibleProjects = Object.keys(visibleProjectGroups);
+            const projectCounts = visibleProjects.map(project => ({
+                project: project,
+                count: visibleProjectGroups[project].length
+            }));
+
+            // Sort by count descending, then by name
+            projectCounts.sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                return a.project.localeCompare(b.project);
+            });
+
+            // Take top 15 projects in visible range (most to least prompts)
+            projects = projectCounts.slice(0, 15).map(pc => pc.project);
+            isFiltered = true;
+
+            // Debug: log the ordering
+            console.log('Reordered projects (most to least):', projectCounts.slice(0, 15).map(pc => `${pc.project}: ${pc.count}`));
+
+            // Update project filter dropdown
+            populateProjectFilter();
+
+            // Reset project filter to show all (of the filtered 15)
+            currentProjectFilter = '';
+            projectFilter.value = '';
+
+            // Reinitialize timeline (skip initial transform so we can restore saved position)
+            initTimeline(true);
+
+            // Restore position and zoom
+            if (svg && zoom) {
+                svg.call(zoom.transform, savedTransform);
+            }
+            container.scrollTop = savedScrollTop;
+
+            // Update stats (no filtering message since we show all projects)
+            const statsEl = document.getElementById('stats');
+            const originalStats = statsEl.textContent;
+            const baseStats = originalStats.split('(')[0].trim();
+            statsEl.textContent = baseStats;
         }
 
         function showTooltip(event, d) {
             const tooltip = d3.select('#tooltip');
             const time = new Date(d.timestamp).toLocaleTimeString();
-            const preview = d.display.length > 100 ?
-                d.display.substring(0, 100) + '...' : d.display;
+            const preview = d.display.length > 300 ?
+                d.display.substring(0, 300) + '...' : d.display;
 
             tooltip.html(`
                 <div class="tooltip-time">${time} • ${d.display.length} chars</div>
@@ -1416,9 +1711,14 @@
         }
 
         function changeDate(delta) {
-            const date = new Date(currentDate);
+            // Parse date as local time to avoid timezone issues
+            const [year, month, day] = currentDate.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
             date.setDate(date.getDate() + delta);
-            const newDate = date.toISOString().split('T')[0];
+            const newYear = date.getFullYear();
+            const newMonth = String(date.getMonth() + 1).padStart(2, '0');
+            const newDay = String(date.getDate()).padStart(2, '0');
+            const newDate = `${newYear}-${newMonth}-${newDay}`;
             loadDate(newDate);
         }
 
@@ -1534,7 +1834,7 @@
         }
 
         function enableBrush() {
-            const container = document.getElementById('timeline-svg');
+            const container = document.getElementById('timeline-scroll-container');
             const width = container.clientWidth;
             const height = container.clientHeight;
             const innerWidth = width - margin.left - margin.right;
@@ -2557,6 +2857,8 @@
         // Initialize
         initTimeline();
 
+        // No filtering - showing all projects and prompts
+
         // Handle window resize
         window.addEventListener('resize', () => {
             initTimeline();
@@ -2571,6 +2873,27 @@
 
             // Check if in theater mode for arrow key navigation
             const inTheaterMode = document.getElementById('theater-mode').classList.contains('active');
+            const inCrawlMode = document.getElementById('crawl-mode').classList.contains('active');
+
+            // Arrow key panning on timeline (when not in theater/crawl mode)
+            if (!inTheaterMode && !inCrawlMode && svg && zoom && currentTransform) {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const panAmount = (e.key === 'ArrowRight' ? -200 : 200) * currentTransform.k; // Pan scaled to zoom level
+                    const newTransform = d3.zoomIdentity
+                        .translate(currentTransform.x + panAmount, 0)
+                        .scale(currentTransform.k);
+                    svg.call(zoom.transform, newTransform);
+                    return;
+                }
+            }
+
+            // 's' key to toggle selection mode
+            if (!inTheaterMode && !inCrawlMode && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault();
+                toggleSelection();
+                return;
+            }
 
             if (e.key === 'Escape') {
                 // Check if in crawl mode
