@@ -153,6 +153,7 @@
 
         #timeline-scroll-container {
             flex: 1;
+            position: relative; /* Establish positioning context */
             overflow: hidden; /* Prevent SVG content from escaping container */
             overflow-y: auto;
             overflow-x: hidden;
@@ -168,6 +169,7 @@
             -webkit-user-select: none;
             -moz-user-select: none;
             cursor: grab;
+            overflow: hidden; /* Clip SVG content at bounds */
         }
 
         #timeline-svg:active {
