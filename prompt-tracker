@@ -543,6 +543,28 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
         finally:
             tracker.close()
 
+    @app.route('/api/prompts/all', methods=['GET'])
+    def get_all_prompts():
+        """API endpoint to fetch all prompts"""
+        tracker = get_tracker()
+        try:
+            all_prompts = tracker.get_all_prompts(include_slash_commands=False)
+            prompts = []
+            for row in all_prompts:
+                prompts.append({
+                    'id': row['id'],
+                    'timestamp': row['timestamp'],
+                    'display': row['display'],
+                    'project': row['project'],
+                    'rating': row['rating'],
+                    'note': row['note']
+                })
+            return jsonify({'prompts': prompts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            tracker.close()
+
     @app.route('/api/rate', methods=['POST'])
     def rate_prompt():
         """API endpoint to rate a prompt"""
@@ -567,6 +589,20 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
         finally:
             tracker.close()
 
+    @app.route('/prompt_timeline.css')
+    def serve_css():
+        """Serve CSS file"""
+        from flask import send_from_directory
+        static_dir = Path(__file__).parent
+        return send_from_directory(static_dir, 'prompt_timeline.css')
+
+    @app.route('/prompt_timeline.js')
+    def serve_js():
+        """Serve JS file"""
+        from flask import send_from_directory
+        static_dir = Path(__file__).parent
+        return send_from_directory(static_dir, 'prompt_timeline.js')
+
     print(f"✓ Starting web server at http://{host}:{port}")
     print(f"  Press Ctrl+C to stop")
 
@@ -576,6 +612,115 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
     app.run(host=host, port=port, debug=False, threaded=True)
 
 
+def serve_react_interface(db_path: Path, port: int = 8081, host: str = '127.0.0.1',
+                          api_port: int = 8080):
+    """Start a React web interface with Flask API backend"""
+    try:
+        from flask import Flask, request, jsonify
+    except ImportError:
+        print("Error: Flask is required for the web server")
+        print("Install it with: pip install flask")
+        sys.exit(1)
+
+    import threading
+    import time
+
+    # Start Flask API server in background thread
+    app = Flask(__name__)
+    app.secret_key = os.urandom(24)
+
+    def get_tracker():
+        """Get a thread-safe tracker instance"""
+        return PromptTracker(db_path)
+
+    @app.route('/api/prompts/all', methods=['GET'])
+    def get_all_prompts():
+        """API endpoint to fetch all prompts"""
+        tracker = get_tracker()
+        try:
+            all_prompts = tracker.get_all_prompts(include_slash_commands=False)
+            prompts = []
+            for row in all_prompts:
+                prompts.append({
+                    'id': row['id'],
+                    'timestamp': row['timestamp'],
+                    'display': row['display'],
+                    'project': row['project'],
+                    'rating': row['rating'],
+                    'note': row['note']
+                })
+            return jsonify({'prompts': prompts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            tracker.close()
+
+    @app.route('/api/rate', methods=['POST'])
+    def rate_prompt():
+        """API endpoint to rate a prompt"""
+        tracker = get_tracker()
+        try:
+            data = request.get_json()
+            prompt_id = data.get('prompt_id')
+            rating = data.get('rating')
+
+            if prompt_id is None:
+                return jsonify({'error': 'Missing prompt_id'}), 400
+
+            if rating is not None and rating not in [0, 1, 2, 3, 4, 5]:
+                return jsonify({'error': 'Rating must be 0-5 or null to clear'}), 400
+
+            tracker.rate_prompt(prompt_id, rating if rating is not None else 0)
+            return jsonify({'success': True, 'message': f'Rated prompt #{prompt_id}'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            tracker.close()
+
+    # Enable CORS for development
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', f'http://{host}:{port}')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response
+
+    def run_flask():
+        app.run(host=host, port=api_port, debug=False, threaded=True, use_reloader=False)
+
+    # Start Flask in background thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # Give Flask time to start
+    time.sleep(1)
+
+    print(f"✓ API server started at http://{host}:{api_port}")
+
+    # Start Vite dev server
+    react_dir = Path(__file__).parent / "react-ui"
+    if not react_dir.exists():
+        print(f"Error: React UI directory not found at {react_dir}")
+        sys.exit(1)
+
+    print(f"✓ Starting React dev server at http://{host}:{port}")
+    print(f"  Press Ctrl+C to stop")
+
+    # Configure Vite to use the correct port
+    env = os.environ.copy()
+    env['VITE_API_URL'] = f'http://{host}:{api_port}'
+
+    try:
+        subprocess.run(
+            ['npm', 'run', 'dev', '--', '--host', host, '--port', str(port)],
+            cwd=react_dir,
+            env=env
+        )
+    except KeyboardInterrupt:
+        print("\n✓ Shutting down servers")
+        sys.exit(0)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Prompt Tracker - Manage and rate your prompt history',
@@ -583,6 +728,8 @@ def main():
         epilog="""
 Examples:
   prompt-tracker sync                          # Sync from history.jsonl
+  prompt-tracker serve                         # Start D3.js web interface
+  prompt-tracker serve_react                   # Start React web interface
   prompt-tracker list                          # List recent prompts (hides /login, /logout)
   prompt-tracker list --limit 50               # List 50 prompts
   prompt-tracker list --min-rating 4           # List 4+ star prompts
@@ -656,6 +803,12 @@ Examples:
     serve_parser = subparsers.add_parser('serve', help='Start web server for browsing timelines')
     serve_parser.add_argument('--port', type=int, default=8080, help='Port to run server on (default: 8080)')
     serve_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+
+    # Serve React command
+    serve_react_parser = subparsers.add_parser('serve_react', help='Start React web interface with API backend')
+    serve_react_parser.add_argument('--port', type=int, default=8081, help='Port for React dev server (default: 8081)')
+    serve_react_parser.add_argument('--api-port', type=int, default=8080, help='Port for API backend (default: 8080)')
+    serve_react_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
 
     # DB path option
     parser.add_argument('--db', type=Path, default=DEFAULT_DB_PATH,
@@ -851,8 +1004,18 @@ Examples:
             serve_web_interface(args.db, port=args.port, host=args.host)
             return  # Server manages its own connections
 
+        elif args.command == 'serve_react':
+            # Auto-sync before starting server
+            count = tracker.sync(DEFAULT_HISTORY_PATH)
+            if count > 0:
+                print(f"✓ Synced {count} new prompts")
+
+            tracker.close()  # Close the main tracker before starting server
+            serve_react_interface(args.db, port=args.port, api_port=args.api_port, host=args.host)
+            return  # Server manages its own connections
+
     finally:
-        if args.command != 'serve':
+        if args.command not in ('serve', 'serve_react'):
             tracker.close()
 
 
