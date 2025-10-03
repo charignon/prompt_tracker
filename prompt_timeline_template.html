@@ -2032,19 +2032,20 @@
                 .attr('class', 'brush')
                 .call(brush);
 
-            // Disable zoom while brushing - use filter to suppress events
-            zoom.filter(function() { return false; });
+            // Disable zoom while brushing by removing all zoom event listeners
+            svg.on('.zoom', null);
         }
 
         function disableBrush() {
             contentGroup.select('.brush').remove();
             brush = null;
 
-            // Re-enable zoom by removing the filter
-            zoom.filter(function(event) {
-                // Default zoom filter logic
-                return (!event.ctrlKey || event.type === 'wheel') && !event.button;
-            });
+            // CRITICAL: Just re-attach zoom listeners without calling svg.call(zoom)
+            // which would re-initialize and potentially trigger events
+            svg.on('mousedown.zoom', zoom);
+            svg.on('dblclick.zoom', zoom);
+            svg.on('touchstart.zoom', zoom);
+            svg.on('wheel.zoom', zoom);
         }
 
         function brushEnded(event) {
