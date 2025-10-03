@@ -1129,9 +1129,6 @@
         function setMode(newMode) {
             if (currentMode === newMode) return;
 
-            // Save viewport before mode change
-            ViewportState.save();
-
             // Exit current mode
             switch(currentMode) {
                 case MODES.SELECTION:
@@ -1159,8 +1156,8 @@
                     break;
             }
 
-            // Restore viewport after mode change
-            ViewportState.restore();
+            // DON'T save/restore viewport on mode change - just freeze it!
+            // Viewport only changes when user explicitly pans/zooms
         }
 
         function enableNormalMode() {
@@ -1287,14 +1284,15 @@
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
             // Add clip path to prevent dots from drawing over axis
+            // Start at y=-20 to accommodate yScale starting at 15px and dot radius
             svg.append('defs')
                 .append('clipPath')
                 .attr('id', 'timeline-clip')
                 .append('rect')
                 .attr('x', 0)
-                .attr('y', 0)
+                .attr('y', -20)
                 .attr('width', innerWidth)
-                .attr('height', innerHeight);
+                .attr('height', innerHeight + 20);
 
             // Create a clipped group for content
             contentGroup = g.append('g')
