@@ -1284,9 +1284,8 @@
             g = svg.append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
-            // Add clip path to prevent dots from drawing over axis
-            // Create clip path to prevent dots from rendering into the axis area
-            svg.append('defs')
+            // Create clip path inside g (same coordinate space as contentGroup)
+            g.append('defs')
                 .append('clipPath')
                 .attr('id', 'timeline-clip')
                 .append('rect')
@@ -1328,7 +1327,7 @@
                 .range([0, rangeWidth]);
 
             // Update clip path width to match the full range width (not just viewport)
-            svg.select('#timeline-clip rect')
+            g.select('#timeline-clip rect')
                 .attr('width', rangeWidth)
                 .attr('height', virtualHeight);
 
