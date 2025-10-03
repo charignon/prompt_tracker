@@ -882,8 +882,9 @@
             // Save viewport before changes
             ViewportState.save();
 
-            // Reinitialize timeline with new project limit (skip initial transform)
-            initTimeline(true);
+            // Just update positions without reinitializing everything
+            updateProjectPositions();
+            renderPrompts();
 
             // Restore viewport and trigger zoomed to start auto-rerank
             ViewportState.restore();
@@ -1722,13 +1723,15 @@
             // Show display
             promptDisplay.style.opacity = '1';
 
-            // Highlight the dot
-            theaterContentGroup.selectAll('.theater-dot')
-                .style('opacity', d => d.id === prompt.id ? 1 : 0.3)
-                .attr('r', d => {
-                    const base = radiusScale(d.display.length);
-                    return d.id === prompt.id ? base * 1.5 : base;
-                });
+            // Highlight the dot (only if theater timeline is initialized)
+            if (theaterContentGroup) {
+                theaterContentGroup.selectAll('.theater-dot')
+                    .style('opacity', d => d.id === prompt.id ? 1 : 0.3)
+                    .attr('r', d => {
+                        const base = radiusScale(d.display.length);
+                        return d.id === prompt.id ? base * 1.5 : base;
+                    });
+            }
         }
 
         function navigateTheaterPrompt(direction) {
@@ -1779,15 +1782,17 @@
                 }
             });
 
-            // Update the dot color in theater timeline
-            theaterContentGroup.selectAll('.theater-dot')
-                .filter(d => d.id === prompt.id)
-                .attr('fill', () => {
-                    if (!rating) return '#666';
-                    if (rating <= 2) return '#e74c3c';
-                    if (rating === 3) return '#f39c12';
-                    return '#27ae60';
-                });
+            // Update the dot color in theater timeline (only if theater timeline is initialized)
+            if (theaterContentGroup) {
+                theaterContentGroup.selectAll('.theater-dot')
+                    .filter(d => d.id === prompt.id)
+                    .attr('fill', () => {
+                        if (!rating) return '#666';
+                        if (rating <= 2) return '#e74c3c';
+                        if (rating === 3) return '#f39c12';
+                        return '#27ae60';
+                    });
+            }
 
             // Update in main timeline too
             contentGroup.selectAll('.prompt-dot')
