@@ -95,13 +95,14 @@ class PromptTracker:
 
     def list_prompts(self, limit: int = 20, min_rating: Optional[int] = None,
                     date_from: Optional[str] = None, date_to: Optional[str] = None,
-                    search: Optional[str] = None, include_slash_commands: bool = False):
+                    search: Optional[str] = None, include_slash_commands: bool = False,
+                    project: Optional[str] = None):
         """List prompts with their ratings"""
         cursor = self.conn.cursor()
 
         query = """
             SELECT p.id, p.timestamp, p.display, p.project,
-                   m.rating, m.note
+                   p.pasted_contents, m.rating, m.note
             FROM prompts p
             LEFT JOIN prompt_metadata m ON p.id = m.prompt_id
             WHERE 1=1
@@ -118,17 +119,24 @@ class PromptTracker:
 
         if date_from:
             dt = datetime.strptime(date_from, '%Y-%m-%d')
+            dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
             query += " AND p.timestamp >= ?"
             params.append(int(dt.timestamp() * 1000))
 
         if date_to:
             dt = datetime.strptime(date_to, '%Y-%m-%d')
+            # End of day is 23:59:59.999
+            dt = dt.replace(hour=23, minute=59, second=59, microsecond=999000)
             query += " AND p.timestamp <= ?"
             params.append(int(dt.timestamp() * 1000))
 
         if search:
             query += " AND p.display LIKE ?"
             params.append(f"%{search}%")
+
+        if project:
+            query += " AND p.project = ?"
+            params.append(project)
 
         query += " ORDER BY p.timestamp DESC LIMIT ?"
         params.append(limit)
@@ -137,18 +145,26 @@ class PromptTracker:
         return cursor.fetchall()
 
     def rate_prompt(self, prompt_id: int, rating: int):
-        """Set rating for a prompt"""
-        if not 1 <= rating <= 5:
-            raise ValueError("Rating must be between 1 and 5")
+        """Set rating for a prompt (0 to clear rating)"""
+        if not 0 <= rating <= 5:
+            raise ValueError("Rating must be between 0 and 5 (0 to clear)")
 
         cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO prompt_metadata (prompt_id, rating)
-            VALUES (?, ?)
-            ON CONFLICT(prompt_id) DO UPDATE SET
-                rating = excluded.rating,
-                updated_at = CURRENT_TIMESTAMP
-        """, (prompt_id, rating))
+        if rating == 0:
+            # Clear the rating
+            cursor.execute("""
+                UPDATE prompt_metadata
+                SET rating = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE prompt_id = ?
+            """, (prompt_id,))
+        else:
+            cursor.execute("""
+                INSERT INTO prompt_metadata (prompt_id, rating)
+                VALUES (?, ?)
+                ON CONFLICT(prompt_id) DO UPDATE SET
+                    rating = excluded.rating,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (prompt_id, rating))
         self.conn.commit()
 
     def add_note(self, prompt_id: int, note: str):
@@ -209,8 +225,9 @@ class PromptTracker:
         """Get all prompts for a specific date or date range"""
         cursor = self.conn.cursor()
 
-        # Parse the from date
+        # Parse the from date - create explicit midnight local time
         dt_from = datetime.strptime(date_from, '%Y-%m-%d')
+        dt_from = dt_from.replace(hour=0, minute=0, second=0, microsecond=0)
         start_ts = int(dt_from.timestamp() * 1000)
 
         # Parse the to date (or use same day if not provided)
@@ -219,7 +236,8 @@ class PromptTracker:
         else:
             dt_to = dt_from
 
-        end_dt = datetime(dt_to.year, dt_to.month, dt_to.day, 23, 59, 59)
+        # End of day is 23:59:59.999
+        end_dt = dt_to.replace(hour=23, minute=59, second=59, microsecond=999000)
         end_ts = int(end_dt.timestamp() * 1000)
 
         query = """
@@ -386,7 +404,7 @@ def format_stars(rating: Optional[int]) -> str:
     return "★" * rating + "☆" * (5 - rating)
 
 
-def serve_web_interface(tracker: PromptTracker, port: int = 8080, host: str = '127.0.0.1'):
+def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'):
     """Start a web server for browsing timelines"""
     try:
         from flask import Flask, request, jsonify, redirect
@@ -398,6 +416,10 @@ def serve_web_interface(tracker: PromptTracker, port: int = 8080, host: str = '1
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
 
+    def get_tracker():
+        """Get a thread-safe tracker instance"""
+        return PromptTracker(db_path)
+
     @app.route('/')
     def index():
         """Redirect to today's timeline"""
@@ -407,7 +429,11 @@ def serve_web_interface(tracker: PromptTracker, port: int = 8080, host: str = '1
     @app.route('/timeline/<date>')
     def timeline(date):
         """Serve timeline for a specific date"""
+        tracker = get_tracker()
         try:
+            # Auto-sync to get latest data
+            tracker.sync(DEFAULT_HISTORY_PATH)
+
             # Validate date format
             datetime.strptime(date, '%Y-%m-%d')
             html = tracker.generate_timeline_html_content(date)
@@ -423,25 +449,32 @@ def serve_web_interface(tracker: PromptTracker, port: int = 8080, host: str = '1
             return "Invalid date format. Use YYYY-MM-DD", 400
         except Exception as e:
             return f"Error generating timeline: {str(e)}", 500
+        finally:
+            tracker.close()
 
     @app.route('/api/rate', methods=['POST'])
     def rate_prompt():
         """API endpoint to rate a prompt"""
+        tracker = get_tracker()
         try:
             data = request.get_json()
             prompt_id = data.get('prompt_id')
             rating = data.get('rating')
 
-            if not prompt_id or not rating:
-                return jsonify({'error': 'Missing prompt_id or rating'}), 400
+            if prompt_id is None:
+                return jsonify({'error': 'Missing prompt_id'}), 400
 
-            if rating not in [1, 2, 3, 4, 5]:
-                return jsonify({'error': 'Rating must be 1-5'}), 400
+            # Allow None/null to clear rating, or 0-5 for setting rating
+            if rating is not None and rating not in [0, 1, 2, 3, 4, 5]:
+                return jsonify({'error': 'Rating must be 0-5 or null to clear'}), 400
 
-            tracker.rate_prompt(prompt_id, rating)
+            # Convert None to 0 for the rate_prompt method
+            tracker.rate_prompt(prompt_id, rating if rating is not None else 0)
             return jsonify({'success': True, 'message': f'Rated prompt #{prompt_id}'})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+        finally:
+            tracker.close()
 
     print(f"✓ Starting web server at http://{host}:{port}")
     print(f"  Press Ctrl+C to stop")
@@ -449,7 +482,7 @@ def serve_web_interface(tracker: PromptTracker, port: int = 8080, host: str = '1
     import webbrowser
     webbrowser.open(f'http://{host}:{port}')
 
-    app.run(host=host, port=port, debug=False)
+    app.run(host=host, port=port, debug=False, threaded=True)
 
 
 def main():
@@ -487,6 +520,7 @@ Examples:
     list_parser.add_argument('--date-from', help='Filter from date (YYYY-MM-DD)')
     list_parser.add_argument('--date-to', help='Filter to date (YYYY-MM-DD)')
     list_parser.add_argument('--search', help='Search in prompt text')
+    list_parser.add_argument('--project', help='Filter by project path')
     list_parser.add_argument('--include-slash-commands', action='store_true',
                            help='Include /login and /logout commands (hidden by default)')
     list_parser.add_argument('--format', choices=['text', 'json'], default='text',
@@ -495,7 +529,7 @@ Examples:
     # Rate command
     rate_parser = subparsers.add_parser('rate', help='Rate a prompt')
     rate_parser.add_argument('prompt_id', type=int, help='Prompt ID')
-    rate_parser.add_argument('rating', type=int, choices=[1,2,3,4,5], help='Rating (1-5 stars)')
+    rate_parser.add_argument('rating', type=int, choices=[0,1,2,3,4,5], help='Rating (1-5 stars, 0 to clear)')
 
     # Note command
     note_parser = subparsers.add_parser('note', help='Add note to a prompt')
@@ -556,7 +590,8 @@ Examples:
                 date_from=args.date_from,
                 date_to=args.date_to,
                 search=args.search,
-                include_slash_commands=args.include_slash_commands
+                include_slash_commands=args.include_slash_commands,
+                project=args.project
             )
 
             if not prompts:
@@ -575,7 +610,8 @@ Examples:
                             'display': p['display'],
                             'project': p['project'],
                             'rating': p['rating'],
-                            'note': p['note']
+                            'note': p['note'],
+                            'pasted_contents': p['pasted_contents'] if p['pasted_contents'] else '{}'
                         })
                     print(json.dumps(prompts_list))
                 else:
@@ -694,6 +730,11 @@ Examples:
                     os.unlink(temp_file)
 
         elif args.command == 'timeline':
+            # Auto-sync before generating timeline
+            count = tracker.sync(DEFAULT_HISTORY_PATH)
+            if count > 0:
+                print(f"✓ Synced {count} new prompts")
+
             output_file = tracker.generate_timeline_html(
                 date_from=args.date,
                 date_to=args.date_to,
@@ -710,8 +751,14 @@ Examples:
                 print("  Opened in browser")
 
         elif args.command == 'serve':
-            serve_web_interface(tracker, port=args.port, host=args.host)
-            return  # Don't close tracker, server keeps it open
+            # Auto-sync before starting server
+            count = tracker.sync(DEFAULT_HISTORY_PATH)
+            if count > 0:
+                print(f"✓ Synced {count} new prompts")
+
+            tracker.close()  # Close the main tracker before starting server
+            serve_web_interface(args.db, port=args.port, host=args.host)
+            return  # Server manages its own connections
 
     finally:
         if args.command != 'serve':

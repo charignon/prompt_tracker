@@ -29,9 +29,9 @@
         }
 
         #header {
-            padding-bottom: 20px;
+            padding-bottom: 10px;
             border-bottom: 1px solid #333;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .header-row {
@@ -53,13 +53,19 @@
 
         .controls {
             display: flex;
-            gap: 15px;
+            gap: 8px;
             align-items: center;
         }
 
         .control-group {
             display: flex;
-            gap: 8px;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .actions-group {
+            display: flex;
+            gap: 5px;
             align-items: center;
         }
 
@@ -72,13 +78,22 @@
             background: #2a2a2a;
             border: 1px solid #444;
             color: #e0e0e0;
-            padding: 8px 16px;
+            padding: 5px 8px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 18px;
+            font-size: 13px;
             font-weight: bold;
             transition: all 0.2s;
-            min-width: 40px;
+            min-width: 32px;
+            white-space: nowrap;
+        }
+
+        .date-nav-btn {
+            padding: 5px 10px;
+        }
+
+        #select-btn {
+            min-width: 88px;
         }
 
         .zoom-btn:hover, .date-nav-btn:hover {
@@ -94,10 +109,11 @@
             background: #2a2a2a;
             border: 1px solid #444;
             color: #e0e0e0;
-            padding: 8px 12px;
+            padding: 6px 8px;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
+            width: 130px;
         }
 
         #date-input:hover {
@@ -107,7 +123,7 @@
         #zoom-level-display {
             font-size: 12px;
             color: #888;
-            min-width: 80px;
+            min-width: 50px;
             text-align: center;
         }
 
@@ -115,11 +131,12 @@
             background: #2a2a2a;
             border: 1px solid #444;
             color: #e0e0e0;
-            padding: 8px 12px;
+            padding: 5px 8px;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
-            min-width: 200px;
+            min-width: 150px;
+            max-width: 150px;
         }
 
         #project-filter:hover {
@@ -129,6 +146,9 @@
         #timeline-svg {
             flex: 1;
             background: #1a1a1a;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
         }
 
         .track-line {
@@ -141,6 +161,9 @@
             fill: #666;
             font-size: 11px;
             font-family: monospace;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
         }
 
         .prompt-dot {
@@ -172,11 +195,15 @@
         .axis path,
         .axis line {
             stroke: #444;
+            stroke-width: 2;
         }
 
         .axis text {
             fill: #888;
             font-size: 11px;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
         }
 
         .grid line {
@@ -361,6 +388,509 @@
             font-style: italic;
             margin-top: 5px;
         }
+
+        .selection-rect {
+            fill: rgba(59, 130, 246, 0.1);
+            stroke: #3b82f6;
+            stroke-width: 2;
+            stroke-dasharray: 3, 6;
+            pointer-events: none;
+        }
+
+        .prompt-dot.selected {
+            fill: #f97316 !important;
+            opacity: 1 !important;
+            stroke: #ea580c;
+            stroke-width: 2;
+        }
+
+        #select-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+
+        .theater-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 10000;
+            display: none;
+        }
+
+        .theater-mode.active {
+            display: block;
+        }
+
+        .theater-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 10001;
+        }
+
+        .theater-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .theater-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .theater-timeline {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 25%;
+        }
+
+        .theater-prompt-display {
+            position: absolute;
+            top: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 80%;
+            max-height: 65%;
+            text-align: center;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .theater-prompt-time {
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .theater-prompt-project {
+            font-size: 20px;
+            font-weight: 600;
+            color: #f97316;
+            text-shadow: 0 2px 10px rgba(249, 115, 22, 0.5);
+        }
+
+        .theater-prompt-text {
+            font-size: 28px;
+            font-weight: 300;
+            line-height: 1.5;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+            overflow-y: auto;
+            max-height: 100%;
+            padding-right: 10px;
+        }
+
+        .theater-prompt-text::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .theater-prompt-text::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .theater-prompt-text::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .theater-prompt-text::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .theater-prompt-meta {
+            font-size: 16px;
+            color: #888;
+            font-weight: 400;
+        }
+
+        .theater-rating {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .theater-rating-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .theater-rating-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: scale(1.1);
+        }
+
+        .theater-rating-btn.active {
+            background: #f97316;
+            border-color: #f97316;
+        }
+
+        .theater-progress {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        .floating-note {
+            position: absolute;
+            font-size: 48px;
+            animation: floatUp 2s ease-out forwards;
+            pointer-events: none;
+            text-shadow: 0 0 20px currentColor;
+        }
+
+        @keyframes floatUp {
+            0% {
+                opacity: 0;
+                transform: translateY(0) scale(0.5);
+            }
+            50% {
+                opacity: 1;
+                transform: translateY(-100px) scale(1.2);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-200px) scale(0.8);
+            }
+        }
+
+        .crawl-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 10000;
+            display: none;
+            overflow: hidden;
+        }
+
+        .crawl-mode.active {
+            display: block;
+        }
+
+        #starfield {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.6;
+        }
+
+        .crawl-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            pointer-events: auto;
+            scroll-behavior: smooth;
+            z-index: 1;
+            /* reverted padding to avoid layout shift */
+        }
+
+        .crawl-text {
+            position: relative;
+            margin: 10vh auto 20vh;
+            width: 70%;
+            max-width: 1000px;
+            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+            font-size: 180%;
+            font-weight: 700;
+            line-height: 1.6;
+            letter-spacing: 2px;
+            color: #00ff41;
+            text-align: center;
+            text-shadow:
+                0 0 10px rgba(0, 255, 65, 0.8),
+                0 0 20px rgba(0, 255, 65, 0.5),
+                0 0 30px rgba(0, 255, 65, 0.3),
+                2px 2px 4px rgba(0, 0, 0, 0.9);
+        }
+
+        /* Keyframes kept for legacy auto-crawl, not used in scroll mode */
+        @keyframes crawl {
+            0% { opacity: 1; }
+            100% { opacity: 1; }
+        }
+
+        .crawl-clock {
+            position: fixed;
+            top: 50%;
+            left: 40px;
+            transform: translateY(-50%);
+            font-family: 'Courier New', monospace;
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ff41;
+            text-shadow:
+                0 0 10px rgba(0, 255, 65, 0.8),
+                0 0 20px rgba(0, 255, 65, 0.6);
+            z-index: 10001;
+        }
+
+        .crawl-prompt {
+            margin-bottom: 120px;
+            padding: 40px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .crawl-prompt:hover {
+            transform: scale(1.1);
+            color: #ffff00;
+            text-shadow:
+                0 0 15px rgba(255, 255, 0, 1),
+                0 0 30px rgba(255, 255, 0, 0.7),
+                0 0 45px rgba(255, 255, 0, 0.5);
+        }
+
+        .crawl-prompt-meta {
+            font-size: 60%;
+            color: #00ffff;
+            margin-bottom: 25px;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: 4px;
+            text-shadow:
+                0 0 10px rgba(0, 255, 255, 0.8),
+                0 0 20px rgba(0, 255, 255, 0.5),
+                2px 2px 4px rgba(0, 0, 0, 0.9);
+        }
+
+        .crawl-prompt-text {
+            font-size: 100%;
+            line-height: 1.5;
+            text-transform: none;
+        }
+
+        .crawl-prompt.highlighted {
+            background: rgba(255, 255, 0, 0.1);
+            border-left: 4px solid #ffff00;
+            padding-left: 36px;
+        }
+
+        .crawl-prompt-rating {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .crawl-rating-star {
+            font-size: 32px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .crawl-rating-star:hover {
+            transform: scale(1.3);
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+
+        .crawl-rating-star.filled {
+            color: #ffd700;
+        }
+
+        .crawl-rating-star.empty {
+            color: #444;
+        }
+
+
+        /* Calendar view styles */
+        .calendar-view {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #1a1a1a;
+            z-index: 10000;
+            display: none;
+            overflow: auto;
+            padding: 40px;
+        }
+
+        .calendar-view.active {
+            display: block;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .calendar-title {
+            font-size: 32px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .calendar-close {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .calendar-close:hover {
+            background: #333;
+        }
+
+        .calendar-nav {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .calendar-nav button {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .calendar-nav button:hover {
+            background: #333;
+        }
+
+        .calendar-nav span {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e0e0e0;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .calendar-day-header {
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .calendar-day:hover {
+            border-color: #666;
+            transform: scale(1.05);
+            z-index: 1;
+        }
+
+        .calendar-day.other-month {
+            opacity: 0.3;
+        }
+
+        .calendar-day.today {
+            border-color: #f97316;
+            border-width: 2px;
+        }
+
+        .calendar-day-number {
+            font-size: 16px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .calendar-day-count {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .calendar-legend {
+            margin-top: 30px;
+            text-align: center;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .calendar-legend-items {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .calendar-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .calendar-legend-box {
+            width: 30px;
+            height: 20px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -369,6 +899,7 @@
             <div class="header-row">
                 <h1>Prompt Timeline</h1>
                 <div class="controls">
+                    <button class="zoom-btn" onclick="showCalendar()" title="Calendar view">📅</button>
                     <div class="control-group">
                         <span class="control-label">Date:</span>
                         <button class="date-nav-btn" onclick="changeDate(-1)" title="Previous day">←</button>
@@ -387,10 +918,18 @@
                         <span id="zoom-level-display">100%</span>
                         <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
                     </div>
+                    <div class="actions-group">
+                        <button class="zoom-btn" id="select-btn" onclick="toggleSelection()" title="Select prompts (drag to select)">⬚ Select</button>
+                        <button class="zoom-btn" id="export-btn" onclick="exportSelected()" title="Export selected to CSV" style="display:none;">📥 CSV</button>
+                        <button class="zoom-btn" id="animate-theater-btn" onclick="animateTheater()" title="Theater mode - 2 minute animation" style="display:none;">🎬 Theater</button>
+                        <button class="zoom-btn" id="animate-10x-btn" onclick="animate10x()" title="Quick preview - 10x speed" style="display:none;">▶ 10x</button>
+                        <button class="zoom-btn" id="animate-crawl-btn" onclick="animateCrawl()" title="Opening crawl - scrolling text" style="display:none;">⭐ Crawl</button>
+                        <span id="selection-count" style="display:none; margin-left: 8px; color: #888; font-size: 12px;"></span>
+                    </div>
                 </div>
             </div>
             <div id="stats">{{STATS}}</div>
-            <div class="zoom-help">Scroll to zoom • Drag to pan • Click dots for details</div>
+            <div class="zoom-help">Scroll to zoom • Drag to pan • Click dots for details • Keys: S (select) = (zoom in) - (zoom out)</div>
             <div class="legend">
                 <div class="legend-item">
                     <div class="legend-dot" style="background: #27ae60"></div>
@@ -426,15 +965,75 @@
     <div class="tooltip-d3" id="tooltip"></div>
     <div id="save-status" class="save-status">Rating saved ✓</div>
 
+    <div id="theater-mode" class="theater-mode">
+        <div class="theater-controls">
+            <button class="theater-btn" onclick="exitTheaterMode()">✕ Exit</button>
+        </div>
+        <div class="theater-prompt-display" id="theater-prompt">
+            <div class="theater-prompt-time" id="theater-time"></div>
+            <div class="theater-prompt-project" id="theater-project"></div>
+            <div class="theater-prompt-text" id="theater-text"></div>
+            <div class="theater-rating" id="theater-rating">
+                <button class="theater-rating-btn" onclick="rateTheaterPrompt(1)">1</button>
+                <button class="theater-rating-btn" onclick="rateTheaterPrompt(2)">2</button>
+                <button class="theater-rating-btn" onclick="rateTheaterPrompt(3)">3</button>
+                <button class="theater-rating-btn" onclick="rateTheaterPrompt(4)">4</button>
+                <button class="theater-rating-btn" onclick="rateTheaterPrompt(5)">5</button>
+            </div>
+        </div>
+        <div class="theater-progress" id="theater-progress"></div>
+        <div class="theater-timeline" id="theater-timeline"></div>
+    </div>
+
+    <div id="crawl-mode" class="crawl-mode">
+        <canvas id="starfield"></canvas>
+        <div class="theater-controls">
+            <button class="theater-btn" onclick="exitCrawlMode()">← Back</button>
+        </div>
+        <div class="crawl-clock" id="crawl-clock"></div>
+        <div class="crawl-container">
+            <div class="crawl-text" id="crawl-text"></div>
+        </div>
+    </div>
+
+    <div id="calendar-view" class="calendar-view">
+        <div class="calendar-header">
+            <h2 class="calendar-title">Prompt Calendar</h2>
+            <button class="calendar-close" onclick="closeCalendar()">✕ Close</button>
+        </div>
+        <div class="calendar-nav">
+            <button onclick="changeCalendarMonth(-1)">← Previous</button>
+            <span id="calendar-month-year"></span>
+            <button onclick="changeCalendarMonth(1)">Next →</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+        <div class="calendar-legend">
+            <div class="legend-title">Prompt Density</div>
+            <div class="legend-scale">
+                <span>Low</span>
+                <div class="legend-gradient"></div>
+                <span>High</span>
+            </div>
+        </div>
+    </div>
+
     <script>
         let prompts = {{PROMPTS_DATA}};
         let currentPrompt = null;
         let currentDate = '{{CURRENT_DATE}}';
         let currentProjectFilter = '';
+        let selectionMode = false;
+        let selectedPrompts = new Set();
+        let brush;
+        let theaterSvg, theaterG, theaterContentGroup;
+        let animationRunning = false;
+        let theaterPrompts = [];  // Prompts being shown in theater mode
+        let theaterCurrentIndex = 0;  // Current prompt index in theater mode
+        let theaterDuration = 120000;  // Duration for theater animation (default 2 minutes)
 
         // D3 visualization variables
-        let svg, g, xScale, yScale, zoom, xAxis;
-        const margin = {top: 40, right: 40, bottom: 60, left: 120};
+        let svg, g, contentGroup, xScale, yScale, zoom, xAxis;
+        const margin = {top: 40, right: 40, bottom: 60, left: 80};
 
         // Group prompts by project
         const projectGroups = {};
@@ -458,7 +1057,8 @@
             const option = document.createElement('option');
             option.value = project;
             const shortName = project.split('/').pop() || project;
-            option.textContent = `${shortName} (${projectGroups[project].length})`;
+            option.textContent = shortName;
+            option.title = project; // Show full path on hover
             projectFilter.appendChild(option);
         });
 
@@ -481,11 +1081,24 @@
             const innerWidth = width - margin.left - margin.right;
             const innerHeight = height - margin.top - margin.bottom;
 
-            // Time scale (X axis)
-            const dayStart = new Date(currentDate);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(currentDate);
-            dayEnd.setHours(23, 59, 59, 999);
+            // Add clip path to prevent dots from drawing over axis
+            svg.append('defs')
+                .append('clipPath')
+                .attr('id', 'timeline-clip')
+                .append('rect')
+                .attr('x', 0)
+                .attr('y', 0)
+                .attr('width', innerWidth)
+                .attr('height', innerHeight);
+
+            // Create a clipped group for content
+            contentGroup = g.append('g')
+                .attr('clip-path', 'url(#timeline-clip)');
+
+            // Time scale (X axis) - parse date in local timezone
+            const [year, month, day] = currentDate.split('-').map(Number);
+            const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+            const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
 
             xScale = d3.scaleTime()
                 .domain([dayStart, dayEnd])
@@ -500,40 +1113,102 @@
                 .range([0, innerHeight])
                 .padding(0.3);
 
-            // Add zoom behavior
+            // Add zoom behavior with smooth trackpad support
             zoom = d3.zoom()
-                .scaleExtent([0.5, 50])
+                .scaleExtent([0.5, 100])
+                .wheelDelta(function(event) {
+                    // Check if primarily horizontal scroll (two-finger left/right)
+                    const absX = Math.abs(event.deltaX);
+                    const absY = Math.abs(event.deltaY);
+
+                    // If horizontal movement is dominant, don't zoom (let it pan)
+                    if (absX > absY * 1.5) {
+                        return 0;
+                    }
+
+                    // Non-linear zoom: faster movements zoom faster
+                    let delta = -event.deltaY;
+
+                    // Normalize based on deltaMode
+                    if (event.deltaMode === 1) {
+                        delta *= 50; // line mode
+                    } else if (event.deltaMode === 2) {
+                        delta *= 800; // page mode
+                    }
+
+                    // Apply non-linear scaling based on speed
+                    const absDelta = Math.abs(delta);
+                    const sign = delta < 0 ? -1 : 1;
+
+                    // Power function: small movements are precise, large movements zoom fast
+                    // Using power of 1.5 for balanced acceleration
+                    const scaledDelta = sign * Math.pow(absDelta, 1.5) * 0.0025;
+
+                    return scaledDelta;
+                })
+                .filter(function(event) {
+                    // Allow zoom on wheel, pinch, and prevent default double-click zoom
+                    return (!event.ctrlKey || event.type === 'wheel') && !event.button;
+                })
                 .on('zoom', zoomed);
 
             svg.call(zoom);
 
-            // Add grid
-            g.append('g')
-                .attr('class', 'grid')
-                .selectAll('line')
-                .data(d3.timeHour.range(dayStart, dayEnd, 1))
-                .join('line')
-                .attr('x1', d => xScale(d))
-                .attr('x2', d => xScale(d))
-                .attr('y1', 0)
-                .attr('y2', innerHeight)
-                .attr('stroke', '#2a2a2a')
-                .attr('stroke-opacity', 0.3);
+            // Add custom wheel handler for horizontal panning (two-finger left/right scroll)
+            svg.on('wheel.pan', function(event) {
+                const absX = Math.abs(event.deltaX);
+                const absY = Math.abs(event.deltaY);
 
-            // Add X axis with adaptive ticks
+                // If horizontal movement is dominant, pan horizontally
+                if (absX > absY * 1.5) {
+                    event.preventDefault();
+
+                    // Get current transform
+                    const transform = d3.zoomTransform(svg.node());
+
+                    // Calculate pan amount with non-linear scaling
+                    const absDeltaX = Math.abs(event.deltaX);
+                    const sign = event.deltaX < 0 ? 1 : -1;
+                    const scaledPan = sign * Math.pow(absDeltaX, 1.2) * 0.5;
+
+                    // Apply pan
+                    const newTransform = transform.translate(scaledPan, 0);
+                    svg.transition()
+                        .duration(0)
+                        .call(zoom.transform, newTransform);
+                }
+            }, { passive: false });
+
+            // Add grid lines for each hour (inside clipped area)
+            const gridGroup = contentGroup.append('g')
+                .attr('class', 'grid');
+
+            for (let hour = 0; hour < 24; hour++) {
+                const hourDate = new Date(year, month - 1, day, hour, 0, 0);
+                gridGroup.append('line')
+                    .attr('data-hour', hour)
+                    .attr('x1', xScale(hourDate))
+                    .attr('x2', xScale(hourDate))
+                    .attr('y1', 0)
+                    .attr('y2', innerHeight)
+                    .attr('stroke', '#2a2a2a')
+                    .attr('stroke-opacity', 0.3);
+            }
+
+            // Add X axis with time ticks (outside clipped area)
             xAxis = g.append('g')
                 .attr('class', 'axis')
                 .attr('transform', `translate(0,${innerHeight})`)
                 .call(d3.axisBottom(xScale)
-                    .ticks(6)  // D3 will choose appropriate intervals
+                    .ticks(d3.timeHour.every(2))
                     .tickFormat(d3.timeFormat('%H:%M')));
 
-            // Add project tracks
+            // Add project tracks (inside clipped area)
             visibleProjects.forEach(project => {
                 const y = yScale(project) + yScale.bandwidth() / 2;
 
                 // Track line
-                g.append('line')
+                contentGroup.append('line')
                     .attr('class', 'track-line')
                     .attr('x1', 0)
                     .attr('x2', innerWidth)
@@ -542,14 +1217,18 @@
                     .attr('stroke', projectColors[project])
                     .attr('stroke-opacity', 0.3);
 
-                // Track label
-                g.append('text')
+                // Track label (outside clipped area for visibility)
+                const label = g.append('text')
                     .attr('class', 'track-label')
                     .attr('x', -10)
                     .attr('y', y)
                     .attr('text-anchor', 'end')
                     .attr('dominant-baseline', 'middle')
                     .text(project.split('/').pop() || project);
+
+                // Add hover tooltip with full path
+                label.append('title')
+                    .text(project);
             });
 
             // Add prompts
@@ -572,7 +1251,7 @@
                 .domain([0, maxLength])
                 .range([4, 20]);
 
-            const dots = g.selectAll('.prompt-dot')
+            const dots = contentGroup.selectAll('.prompt-dot')
                 .data(visiblePrompts, d => d.id);
 
             // Remove old dots
@@ -613,7 +1292,12 @@
                 .style('opacity', 0.8)
                 .on('mouseover', showTooltip)
                 .on('mouseout', hideTooltip)
-                .on('click', showPanel);
+                .on('click', function(event, d) {
+                    // Don't open panel if in selection mode
+                    if (!selectionMode) {
+                        showPromptInTheater(d);
+                    }
+                });
 
             newDots.transition()
                 .duration(300)
@@ -624,39 +1308,64 @@
             const newXScale = event.transform.rescaleX(xScale);
             const zoomLevel = event.transform.k;
 
-            // Adaptive tick count and format based on zoom level
-            let tickCount, tickFormat;
+            // Adaptive tick interval and format based on zoom level
+            let tickInterval, tickFormat;
             if (zoomLevel < 1) {
-                // Zoomed out: fewer ticks, show hours
-                tickCount = 6;
+                // Zoomed out: 4-hour intervals
+                tickInterval = d3.timeHour.every(4);
                 tickFormat = d3.timeFormat('%H:%M');
-            } else if (zoomLevel < 3) {
-                // Normal view: moderate ticks
-                tickCount = 12;
+            } else if (zoomLevel < 2) {
+                // Normal view: 2-hour intervals
+                tickInterval = d3.timeHour.every(2);
                 tickFormat = d3.timeFormat('%H:%M');
-            } else if (zoomLevel < 10) {
-                // Zoomed in: more ticks, show minutes
-                tickCount = 20;
+            } else if (zoomLevel < 5) {
+                // Zoomed in: hourly
+                tickInterval = d3.timeHour.every(1);
+                tickFormat = d3.timeFormat('%H:%M');
+            } else if (zoomLevel < 15) {
+                // More zoomed: 30-minute intervals
+                tickInterval = d3.timeMinute.every(30);
+                tickFormat = d3.timeFormat('%H:%M');
+            } else if (zoomLevel < 40) {
+                // Very zoomed: 10-minute intervals
+                tickInterval = d3.timeMinute.every(10);
                 tickFormat = d3.timeFormat('%H:%M');
             } else {
-                // Very zoomed in: many ticks, show seconds
-                tickCount = 30;
+                // Extremely zoomed: 5-minute intervals with seconds
+                tickInterval = d3.timeMinute.every(5);
                 tickFormat = d3.timeFormat('%H:%M:%S');
             }
 
             // Update axis with adaptive ticks
             xAxis.call(d3.axisBottom(newXScale)
-                .ticks(tickCount)
+                .ticks(tickInterval)
                 .tickFormat(tickFormat));
 
             // Update dots
-            g.selectAll('.prompt-dot')
+            contentGroup.selectAll('.prompt-dot')
                 .attr('cx', d => newXScale(new Date(d.timestamp)));
 
-            // Update grid
-            g.selectAll('.grid line')
-                .attr('x1', d => newXScale(d))
-                .attr('x2', d => newXScale(d));
+            // Update grid lines
+            const [year, month, day] = currentDate.split('-').map(Number);
+            contentGroup.selectAll('.grid line')
+                .attr('x1', function() {
+                    const hour = parseInt(d3.select(this).attr('data-hour') || '0');
+                    const hourDate = new Date(year, month - 1, day, hour, 0, 0);
+                    return newXScale(hourDate);
+                })
+                .attr('x2', function() {
+                    const hour = parseInt(d3.select(this).attr('data-hour') || '0');
+                    const hourDate = new Date(year, month - 1, day, hour, 0, 0);
+                    return newXScale(hourDate);
+                });
+
+            // Update track lines
+            contentGroup.selectAll('.track-line')
+                .attr('x2', function() {
+                    const container = document.getElementById('timeline-svg');
+                    const width = container.clientWidth;
+                    return width - margin.left - margin.right;
+                });
 
             // Update zoom display
             const zoomPercent = Math.round(event.transform.k * 100);
@@ -779,10 +1488,21 @@
         }
 
         function saveRating(promptId, rating) {
-            const ratings = JSON.parse(localStorage.getItem('prompt-ratings') || '{}');
-            ratings[promptId] = { rating, timestamp: Date.now() };
-            localStorage.setItem('prompt-ratings', JSON.stringify(ratings));
-            console.log(`To save permanently: prompt-tracker rate ${promptId} ${rating}`);
+            // Save to server
+            fetch('/api/rate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    prompt_id: promptId,
+                    rating: rating
+                })
+            }).then(response => {
+                if (!response.ok) {
+                    console.error('Failed to save rating');
+                }
+            }).catch(error => {
+                console.error('Error saving rating:', error);
+            });
         }
 
         function closePanel() {
@@ -796,6 +1516,1025 @@
             return div.innerHTML;
         }
 
+        function toggleSelection() {
+            selectionMode = !selectionMode;
+            const btn = document.getElementById('select-btn');
+
+            if (selectionMode) {
+                btn.classList.add('active');
+                btn.textContent = '✓ Selecting';
+                enableBrush();
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '⬚ Select';
+                disableBrush();
+                clearSelection();
+            }
+        }
+
+        function enableBrush() {
+            const container = document.getElementById('timeline-svg');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            brush = d3.brush()
+                .extent([[0, 0], [innerWidth, innerHeight]])
+                .on('end', brushEnded);
+
+            contentGroup.append('g')
+                .attr('class', 'brush')
+                .call(brush);
+
+            // Disable zoom while brushing
+            svg.on('.zoom', null);
+        }
+
+        function disableBrush() {
+            contentGroup.select('.brush').remove();
+            brush = null;
+
+            // Re-enable zoom
+            svg.call(zoom);
+        }
+
+        function brushEnded(event) {
+            const selection = event.selection;
+            if (!selection) return;
+
+            selectedPrompts.clear();
+
+            // Get current transform
+            const transform = d3.zoomTransform(svg.node());
+            const newXScale = transform.rescaleX(xScale);
+
+            // Find dots within selection
+            contentGroup.selectAll('.prompt-dot').each(function(d) {
+                const cx = parseFloat(d3.select(this).attr('cx'));
+                const cy = parseFloat(d3.select(this).attr('cy'));
+
+                if (cx >= selection[0][0] && cx <= selection[1][0] &&
+                    cy >= selection[0][1] && cy <= selection[1][1]) {
+                    selectedPrompts.add(d.id);
+                    d3.select(this).classed('selected', true);
+                } else {
+                    d3.select(this).classed('selected', false);
+                }
+            });
+
+            // Clear the brush selection rectangle but keep the dots selected
+            contentGroup.select('.brush').call(brush.move, null);
+
+            updateSelectionUI();
+        }
+
+        function clearSelection() {
+            selectedPrompts.clear();
+            contentGroup.selectAll('.prompt-dot').classed('selected', false);
+            updateSelectionUI();
+        }
+
+        function updateSelectionUI() {
+            const count = selectedPrompts.size;
+            const countEl = document.getElementById('selection-count');
+            const exportBtn = document.getElementById('export-btn');
+            const animateTheaterBtn = document.getElementById('animate-theater-btn');
+            const animateCrawlBtn = document.getElementById('animate-crawl-btn');
+            const animate10xBtn = document.getElementById('animate-10x-btn');
+
+            if (count > 0) {
+                countEl.textContent = `${count} selected`;
+                countEl.style.display = 'inline';
+                exportBtn.style.display = 'inline-block';
+                animateTheaterBtn.style.display = 'inline-block';
+                animateCrawlBtn.style.display = 'inline-block';
+                animate10xBtn.style.display = 'inline-block';
+            } else {
+                countEl.style.display = 'none';
+                exportBtn.style.display = 'none';
+                animateTheaterBtn.style.display = 'none';
+                animateCrawlBtn.style.display = 'none';
+                animate10xBtn.style.display = 'none';
+            }
+        }
+
+        function exportSelected() {
+            if (selectedPrompts.size === 0) return;
+
+            const selected = prompts.filter(p => selectedPrompts.has(p.id));
+
+            // Sort by timestamp
+            selected.sort((a, b) => a.timestamp - b.timestamp);
+
+            // Create CSV
+            const headers = ['ID', 'Timestamp', 'Time', 'Project', 'Rating', 'Prompt', 'Note'];
+            const rows = [headers];
+
+            selected.forEach(p => {
+                const dt = new Date(p.timestamp);
+                const timeStr = dt.toLocaleString();
+                const rating = p.rating || '';
+                const note = (p.note || '').replace(/"/g, '""');
+                const prompt = p.display.replace(/"/g, '""');
+                const project = (p.project || '').replace(/"/g, '""');
+
+                rows.push([
+                    p.id,
+                    p.timestamp,
+                    timeStr,
+                    project,
+                    rating,
+                    `"${prompt}"`,
+                    `"${note}"`
+                ]);
+            });
+
+            const csv = rows.map(row => row.join(',')).join('\n');
+
+            // Download CSV
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prompts_${currentDate}_${selectedPrompts.size}_selected.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function animateTheater() {
+            if (selectedPrompts.size === 0) return;
+
+            const selected = prompts.filter(p => selectedPrompts.has(p.id));
+            selected.sort((a, b) => a.timestamp - b.timestamp);
+
+            if (selected.length === 0) return;
+
+            // Store prompts for navigation
+            theaterPrompts = selected;
+            theaterCurrentIndex = 0;
+            theaterDuration = 120000;  // 2-minute mode
+
+            // Enter theater mode
+            const theaterMode = document.getElementById('theater-mode');
+            theaterMode.classList.add('active');
+            animationRunning = false;  // Don't auto-play
+
+            // Initialize theater timeline
+            initTheaterTimeline(selected);
+
+            // Clear selection highlighting
+            contentGroup.selectAll('.prompt-dot').classed('selected', false);
+
+            // Show first prompt without auto-playing
+            showTheaterPrompt(0);
+        }
+
+        function animate10x() {
+            if (selectedPrompts.size === 0) return;
+
+            const selected = prompts.filter(p => selectedPrompts.has(p.id));
+            selected.sort((a, b) => a.timestamp - b.timestamp);
+
+            if (selected.length === 0) return;
+
+            // Store prompts for navigation
+            theaterPrompts = selected;
+            theaterCurrentIndex = 0;
+
+            // Calculate 10x speed duration
+            const firstTimestamp = selected[0].timestamp;
+            const lastTimestamp = selected[selected.length - 1].timestamp;
+            const actualDuration = lastTimestamp - firstTimestamp;
+            theaterDuration = actualDuration / 10;
+
+            // Enter theater mode
+            const theaterMode = document.getElementById('theater-mode');
+            theaterMode.classList.add('active');
+            animationRunning = false;  // Don't auto-play
+
+            // Initialize theater timeline
+            initTheaterTimeline(selected);
+
+            // Clear selection highlighting
+            contentGroup.selectAll('.prompt-dot').classed('selected', false);
+
+            // Show first prompt without auto-playing
+            showTheaterPrompt(0);
+        }
+
+        function initTheaterTimeline(selected) {
+            const container = document.getElementById('theater-timeline');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const theaterMargin = {top: 20, right: 40, bottom: 40, left: 80};
+
+            // Clear existing
+            d3.select('#theater-timeline').selectAll('*').remove();
+
+            theaterSvg = d3.select('#theater-timeline')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            theaterG = theaterSvg.append('g')
+                .attr('transform', `translate(${theaterMargin.left},${theaterMargin.top})`);
+
+            const innerWidth = width - theaterMargin.left - theaterMargin.right;
+            const innerHeight = height - theaterMargin.top - theaterMargin.bottom;
+
+            // Add clip path
+            theaterSvg.append('defs')
+                .append('clipPath')
+                .attr('id', 'theater-clip')
+                .append('rect')
+                .attr('x', 0)
+                .attr('y', 0)
+                .attr('width', innerWidth)
+                .attr('height', innerHeight);
+
+            theaterContentGroup = theaterG.append('g')
+                .attr('clip-path', 'url(#theater-clip)');
+
+            // Create time scale for selected prompts
+            const [year, month, day] = currentDate.split('-').map(Number);
+            const firstTime = new Date(selected[0].timestamp);
+            const lastTime = new Date(selected[selected.length - 1].timestamp);
+
+            const theaterXScale = d3.scaleTime()
+                .domain([firstTime, lastTime])
+                .range([0, innerWidth]);
+
+            // Group by project
+            const selectedProjects = [...new Set(selected.map(p => p.project || 'Unknown'))];
+            const theaterYScale = d3.scaleBand()
+                .domain(selectedProjects)
+                .range([0, innerHeight])
+                .padding(0.3);
+
+            // Add project tracks
+            selectedProjects.forEach(project => {
+                const y = theaterYScale(project) + theaterYScale.bandwidth() / 2;
+
+                theaterContentGroup.append('line')
+                    .attr('class', 'track-line')
+                    .attr('x1', 0)
+                    .attr('x2', innerWidth)
+                    .attr('y1', y)
+                    .attr('y2', y)
+                    .attr('stroke', projectColors[project] || '#666')
+                    .attr('stroke-opacity', 0.3);
+
+                const theaterLabel = theaterG.append('text')
+                    .attr('class', 'track-label')
+                    .attr('x', -10)
+                    .attr('y', y)
+                    .attr('text-anchor', 'end')
+                    .attr('dominant-baseline', 'middle')
+                    .style('fill', '#888')
+                    .style('font-size', '11px')
+                    .text(project.split('/').pop() || project);
+
+                // Add hover tooltip with full path
+                theaterLabel.append('title')
+                    .text(project);
+            });
+
+            // Add axis
+            theaterG.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,${innerHeight})`)
+                .style('color', '#666')
+                .call(d3.axisBottom(theaterXScale)
+                    .ticks(5)
+                    .tickFormat(d3.timeFormat('%H:%M')));
+
+            // Add dots (initially invisible)
+            const maxLength = d3.max(selected, d => d.display.length) || 1000;
+            const radiusScale = d3.scaleSqrt()
+                .domain([0, maxLength])
+                .range([4, 20]);
+
+            theaterContentGroup.selectAll('.theater-dot')
+                .data(selected)
+                .enter()
+                .append('circle')
+                .attr('class', 'theater-dot')
+                .attr('cx', d => theaterXScale(new Date(d.timestamp)))
+                .attr('cy', d => {
+                    const project = d.project || 'Unknown';
+                    return theaterYScale(project) + theaterYScale.bandwidth() / 2;
+                })
+                .attr('r', d => radiusScale(d.display.length))
+                .attr('fill', d => {
+                    if (!d.rating) return '#666';
+                    if (d.rating <= 2) return '#e74c3c';
+                    if (d.rating === 3) return '#f39c12';
+                    return '#27ae60';
+                })
+                .style('opacity', 0);
+
+            return {theaterXScale, theaterYScale, innerWidth, innerHeight};
+        }
+
+        function playTheaterAnimation(selected, totalDuration) {
+            const firstTimestamp = selected[0].timestamp;
+            const lastTimestamp = selected[selected.length - 1].timestamp;
+            const actualDuration = lastTimestamp - firstTimestamp;
+
+            let currentIndex = 0;
+            const startTime = Date.now();
+
+            const promptDisplay = document.getElementById('theater-prompt');
+            const promptTime = document.getElementById('theater-time');
+            const promptProject = document.getElementById('theater-project');
+            const promptText = document.getElementById('theater-text');
+            const progressEl = document.getElementById('theater-progress');
+
+            function animateNext() {
+                if (!animationRunning || currentIndex >= selected.length) {
+                    // Animation complete
+                    promptDisplay.style.opacity = '0';
+                    setTimeout(() => {
+                        if (animationRunning) {
+                            exitTheaterMode();
+                        }
+                    }, 1000);
+                    return;
+                }
+
+                const prompt = selected[currentIndex];
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(100, (elapsed / totalDuration) * 100);
+
+                // Update progress
+                progressEl.textContent = `${currentIndex + 1} / ${selected.length} prompts • ${Math.round(progress)}%`;
+
+                // Show the dot with dramatic effect
+                const dot = theaterContentGroup.selectAll('.theater-dot')
+                    .filter(d => d.id === prompt.id);
+
+                dot.transition()
+                    .duration(200)
+                    .style('opacity', 0.3)
+                    .transition()
+                    .duration(300)
+                    .style('opacity', 1)
+                    .attr('r', function() {
+                        return parseFloat(d3.select(this).attr('r')) * 1.5;
+                    })
+                    .transition()
+                    .duration(400)
+                    .attr('r', function() {
+                        return parseFloat(d3.select(this).attr('r')) / 1.5;
+                    });
+
+                // Display prompt text above timeline
+                const time = new Date(prompt.timestamp).toLocaleTimeString();
+                promptTime.textContent = time;
+                const projectName = prompt.project ? (prompt.project.split('/').pop() || prompt.project) : 'Unknown';
+                promptProject.textContent = projectName;
+                promptProject.title = prompt.project || 'Unknown';
+                promptText.textContent = prompt.display;
+                promptText.scrollTop = 0; // Reset scroll position
+
+                promptDisplay.style.opacity = '1';
+
+                // Create floating music note effect
+                createFloatingNote(dot.node());
+
+                // Calculate delay until next prompt
+                currentIndex++;
+                if (currentIndex < selected.length) {
+                    const nextPrompt = selected[currentIndex];
+                    const timeGap = nextPrompt.timestamp - prompt.timestamp;
+                    const delay = (timeGap / actualDuration) * totalDuration;
+                    setTimeout(animateNext, Math.max(300, delay));
+                } else {
+                    setTimeout(animateNext, 2000); // Show last prompt for 2 seconds
+                }
+            }
+
+            animateNext();
+        }
+
+        function createFloatingNote(dotElement) {
+            if (!dotElement) return;
+
+            const bbox = dotElement.getBoundingClientRect();
+            const theaterBox = document.getElementById('theater-timeline').getBoundingClientRect();
+
+            const note = document.createElement('div');
+            note.className = 'floating-note';
+            note.textContent = '♪';
+
+            // Random color from prompt rating colors
+            const colors = ['#e74c3c', '#f39c12', '#27ae60', '#3b82f6'];
+            note.style.color = colors[Math.floor(Math.random() * colors.length)];
+
+            note.style.left = bbox.left + 'px';
+            note.style.top = bbox.top + 'px';
+
+            document.getElementById('theater-mode').appendChild(note);
+
+            setTimeout(() => note.remove(), 2000);
+        }
+
+        function showTheaterPrompt(index) {
+            if (index < 0 || index >= theaterPrompts.length) return;
+
+            theaterCurrentIndex = index;
+            const prompt = theaterPrompts[index];
+
+            const promptDisplay = document.getElementById('theater-prompt');
+            const promptTime = document.getElementById('theater-time');
+            const promptProject = document.getElementById('theater-project');
+            const promptText = document.getElementById('theater-text');
+            const progressEl = document.getElementById('theater-progress');
+
+            // Update display
+            const time = new Date(prompt.timestamp).toLocaleTimeString();
+            promptTime.textContent = time;
+            const projectName = prompt.project ? (prompt.project.split('/').pop() || prompt.project) : 'Unknown';
+            promptProject.textContent = projectName;
+            promptProject.title = prompt.project || 'Unknown';
+            promptText.textContent = prompt.display;
+            promptText.scrollTop = 0; // Reset scroll position
+
+            // Update progress
+            progressEl.textContent = `${index + 1} / ${theaterPrompts.length} prompts`;
+
+            // Update rating buttons
+            const ratingButtons = document.querySelectorAll('.theater-rating-btn');
+            ratingButtons.forEach((btn, i) => {
+                if (prompt.rating && i + 1 === prompt.rating) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Show display
+            promptDisplay.style.opacity = '1';
+
+            // Highlight the dot
+            theaterContentGroup.selectAll('.theater-dot')
+                .style('opacity', d => d.id === prompt.id ? 1 : 0.3)
+                .attr('r', d => {
+                    const base = radiusScale(d.display.length);
+                    return d.id === prompt.id ? base * 1.5 : base;
+                });
+        }
+
+        function navigateTheaterPrompt(direction) {
+            if (theaterPrompts.length === 0) return;
+
+            const newIndex = theaterCurrentIndex + direction;
+            if (newIndex >= 0 && newIndex < theaterPrompts.length) {
+                showTheaterPrompt(newIndex);
+            }
+        }
+
+        function rateTheaterPrompt(rating) {
+            if (theaterPrompts.length === 0 || theaterCurrentIndex < 0) return;
+
+            const prompt = theaterPrompts[theaterCurrentIndex];
+
+            // Toggle off if clicking the same rating
+            if (prompt.rating === rating) {
+                rating = null;
+            }
+
+            // Update the prompt's rating
+            prompt.rating = rating;
+
+            // Find and update the prompt in the main prompts array
+            const mainPrompt = prompts.find(p => p.id === prompt.id);
+            if (mainPrompt) {
+                mainPrompt.rating = rating;
+            }
+
+            // Send to server
+            fetch('/api/rate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    prompt_id: prompt.id,
+                    rating: rating
+                })
+            });
+
+            // Update rating button highlights
+            const ratingButtons = document.querySelectorAll('.theater-rating-btn');
+            ratingButtons.forEach((btn, i) => {
+                if (rating && i + 1 === rating) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Update the dot color in theater timeline
+            theaterContentGroup.selectAll('.theater-dot')
+                .filter(d => d.id === prompt.id)
+                .attr('fill', () => {
+                    if (!rating) return '#666';
+                    if (rating <= 2) return '#e74c3c';
+                    if (rating === 3) return '#f39c12';
+                    return '#27ae60';
+                });
+
+            // Update in main timeline too
+            contentGroup.selectAll('.prompt-dot')
+                .filter(d => d.id === prompt.id)
+                .attr('class', d => {
+                    const classes = ['prompt-dot'];
+                    if (rating) {
+                        classes.push(`rating-${rating}`);
+                    } else {
+                        classes.push('unrated');
+                    }
+                    return classes.join(' ');
+                });
+        }
+
+        function toggleTheaterAutoplay() {
+            if (theaterPrompts.length === 0) return;
+
+            if (animationRunning) {
+                // Stop auto-play
+                animationRunning = false;
+            } else {
+                // Start auto-play from current position
+                animationRunning = true;
+
+                // Start from current prompt instead of beginning
+                const remainingPrompts = theaterPrompts.slice(theaterCurrentIndex);
+                const firstTimestamp = theaterPrompts[theaterCurrentIndex].timestamp;
+                const lastTimestamp = theaterPrompts[theaterPrompts.length - 1].timestamp;
+                const remainingTime = lastTimestamp - firstTimestamp;
+
+                // Adjust duration proportionally
+                const adjustedDuration = (remainingTime / (theaterPrompts[theaterPrompts.length - 1].timestamp - theaterPrompts[0].timestamp)) * theaterDuration;
+
+                playTheaterAnimationFrom(theaterCurrentIndex, adjustedDuration);
+            }
+        }
+
+        function playTheaterAnimationFrom(startIndex, totalDuration) {
+            const selected = theaterPrompts;
+            const firstTimestamp = selected[startIndex].timestamp;
+            const lastTimestamp = selected[selected.length - 1].timestamp;
+            const actualDuration = lastTimestamp - firstTimestamp;
+
+            let currentIndex = startIndex;
+            const startTime = Date.now();
+
+            const promptDisplay = document.getElementById('theater-prompt');
+            const promptTime = document.getElementById('theater-time');
+            const promptProject = document.getElementById('theater-project');
+            const promptText = document.getElementById('theater-text');
+            const progressEl = document.getElementById('theater-progress');
+
+            function animateNext() {
+                if (!animationRunning || currentIndex >= selected.length) {
+                    // Animation complete
+                    promptDisplay.style.opacity = '0';
+                    setTimeout(() => {
+                        if (animationRunning) {
+                            animationRunning = false;
+                        }
+                    }, 1000);
+                    return;
+                }
+
+                const prompt = selected[currentIndex];
+                theaterCurrentIndex = currentIndex;
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(100, (elapsed / totalDuration) * 100);
+
+                // Update progress
+                progressEl.textContent = `${currentIndex + 1} / ${selected.length} prompts • ${Math.round(progress)}%`;
+
+                // Show the dot with dramatic effect
+                const dot = theaterContentGroup.selectAll('.theater-dot')
+                    .filter(d => d.id === prompt.id);
+
+                dot.transition()
+                    .duration(200)
+                    .style('opacity', 0.3)
+                    .transition()
+                    .duration(300)
+                    .style('opacity', 1)
+                    .attr('r', function() {
+                        return parseFloat(d3.select(this).attr('r')) * 1.5;
+                    })
+                    .transition()
+                    .duration(400)
+                    .attr('r', function() {
+                        return parseFloat(d3.select(this).attr('r')) / 1.5;
+                    });
+
+                // Display prompt text above timeline
+                const time = new Date(prompt.timestamp).toLocaleTimeString();
+                promptTime.textContent = time;
+                const projectName = prompt.project ? (prompt.project.split('/').pop() || prompt.project) : 'Unknown';
+                promptProject.textContent = projectName;
+                promptProject.title = prompt.project || 'Unknown';
+                promptText.textContent = prompt.display;
+                promptText.scrollTop = 0; // Reset scroll position
+
+                // Update rating buttons
+                const ratingButtons = document.querySelectorAll('.theater-rating-btn');
+                ratingButtons.forEach((btn, i) => {
+                    if (prompt.rating && i + 1 === prompt.rating) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+
+                promptDisplay.style.opacity = '1';
+
+                // Highlight current dot
+                theaterContentGroup.selectAll('.theater-dot')
+                    .style('opacity', d => d.id === prompt.id ? 1 : 0.3)
+                    .attr('r', d => {
+                        const base = radiusScale(d.display.length);
+                        return d.id === prompt.id ? base * 1.5 : base;
+                    });
+
+                // Create floating music note effect
+                createFloatingNote(dot.node());
+
+                // Calculate delay until next prompt
+                currentIndex++;
+                if (currentIndex < selected.length) {
+                    const nextPrompt = selected[currentIndex];
+                    const timeGap = nextPrompt.timestamp - prompt.timestamp;
+                    const delay = (timeGap / actualDuration) * totalDuration;
+                    setTimeout(animateNext, Math.max(300, delay));
+                } else {
+                    setTimeout(animateNext, 2000); // Show last prompt for 2 seconds
+                }
+            }
+
+            animateNext();
+        }
+
+        function showPromptInTheater(clickedPrompt) {
+            // Sort all prompts by timestamp
+            const sortedPrompts = [...prompts].sort((a, b) => a.timestamp - b.timestamp);
+
+            // Find the index of the clicked prompt
+            const clickedIndex = sortedPrompts.findIndex(p => p.id === clickedPrompt.id);
+            if (clickedIndex === -1) return;
+
+            // Set up theater mode with all prompts
+            theaterPrompts = sortedPrompts;
+            theaterCurrentIndex = clickedIndex;
+
+            // Enter theater mode
+            const theaterMode = document.getElementById('theater-mode');
+            theaterMode.classList.add('active');
+            animationRunning = true;
+
+            // Show the clicked prompt
+            showTheaterPrompt(clickedIndex);
+        }
+
+        function exitTheaterMode() {
+            animationRunning = false;
+            const theaterMode = document.getElementById('theater-mode');
+            theaterMode.classList.remove('active');
+
+            // Cleanup
+            d3.select('#theater-timeline').selectAll('*').remove();
+
+            // Turn off selection mode
+            if (selectionMode) {
+                selectionMode = false;
+                const btn = document.getElementById('select-btn');
+                btn.classList.remove('active');
+                btn.textContent = '⬚ Select';
+                disableBrush();
+            }
+
+            // Restore main timeline
+            selectedPrompts.clear();
+            contentGroup.selectAll('.prompt-dot').classed('selected', false);
+
+            // Update dots to reflect any rating changes made in theater mode
+            contentGroup.selectAll('.prompt-dot')
+                .attr('class', d => {
+                    const classes = ['prompt-dot'];
+                    if (d.rating) {
+                        classes.push(`rating-${d.rating}`);
+                    } else {
+                        classes.push('unrated');
+                    }
+                    if (selectedPrompts.has(d.id)) {
+                        classes.push('selected');
+                    }
+                    return classes.join(' ');
+                });
+
+            updateSelectionUI();
+        }
+
+        function animateCrawl() {
+            if (selectedPrompts.size === 0) return;
+
+            const selected = prompts.filter(p => selectedPrompts.has(p.id));
+            selected.sort((a, b) => a.timestamp - b.timestamp);
+
+            if (selected.length === 0) return;
+
+            // Store for navigation
+            window.crawlPrompts = selected;
+            window.crawlCurrentIndex = 0;
+
+            // Enter crawl mode
+            const crawlMode = document.getElementById('crawl-mode');
+            crawlMode.classList.add('active');
+
+            // Start starfield
+            initStarfield();
+            // Start crawl clock (current time)
+            updateCrawlClock();
+
+            // Build scrollable list
+            const crawlText = document.getElementById('crawl-text');
+            crawlText.innerHTML = '';
+
+            selected.forEach((prompt, index) => {
+                const promptDiv = document.createElement('div');
+                promptDiv.className = 'crawl-prompt';
+                promptDiv.dataset.index = index;
+                promptDiv.dataset.promptId = prompt.id;
+
+                const meta = document.createElement('div');
+                meta.className = 'crawl-prompt-meta';
+                const time = new Date(prompt.timestamp).toLocaleTimeString('en-US', { 
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false 
+                });
+                meta.textContent = time;
+
+                const text = document.createElement('div');
+                text.className = 'crawl-prompt-text';
+                text.textContent = prompt.display;
+
+                const rating = document.createElement('div');
+                rating.className = 'crawl-prompt-rating';
+                rating.innerHTML = [1,2,3,4,5].map(r => 
+                    `<span class="crawl-rating-star ${prompt.rating >= r ? 'filled' : 'empty'}" 
+                           onclick="rateCrawlPrompt(${prompt.id}, ${r})"
+                           data-rating="${r}">★</span>`
+                ).join('');
+
+                promptDiv.appendChild(meta);
+                promptDiv.appendChild(text);
+                promptDiv.appendChild(rating);
+                
+                promptDiv.onclick = function(e) {
+                    if (!e.target.classList.contains('crawl-rating-star')) {
+                        highlightCrawlPrompt(index);
+                    }
+                };
+
+                crawlText.appendChild(promptDiv);
+            });
+
+            // Clear selection highlighting
+            contentGroup.selectAll('.prompt-dot').classed('selected', false);
+            updateSelectionUI();
+
+            // Highlight the first prompt by default
+            if (window.crawlPrompts && window.crawlPrompts.length > 0) {
+                highlightCrawlPrompt(0);
+            }
+
+            // Sync highlight with mouse scroll position
+            setupCrawlScrollSync();
+        }
+
+        let starfieldAnimationId;
+        let crawlClockInterval;
+
+        function updateCrawlClock() {
+            const clockEl = document.getElementById('crawl-clock');
+
+            function updateTime() {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                clockEl.textContent = `${hours}:${minutes}:${seconds}`;
+            }
+
+            updateTime();
+            crawlClockInterval = setInterval(updateTime, 1000);
+        }
+
+        // Keep track of scroll listener to clean up on exit
+        let crawlScrollListener;
+        let suppressCrawlScroll = false;
+
+        function setupCrawlScrollSync() {
+            // Remove any existing listener first
+            const container = document.querySelector('.crawl-container');
+            if (!container) return;
+            if (crawlScrollListener) {
+                container.removeEventListener('scroll', crawlScrollListener);
+            }
+
+            // Compute which prompt is closest to the vertical center on scroll
+            crawlScrollListener = function() {
+                if (!document.getElementById('crawl-mode').classList.contains('active')) return;
+                const promptsEls = Array.from(document.querySelectorAll('.crawl-prompt'));
+                if (promptsEls.length === 0) return;
+
+                // Use container center instead of window for robustness
+                const containerRect = container.getBoundingClientRect();
+                const viewportCenter = containerRect.top + containerRect.height / 2;
+                let closestIdx = 0;
+                let closestDist = Infinity;
+
+                for (let i = 0; i < promptsEls.length; i++) {
+                    const rect = promptsEls[i].getBoundingClientRect();
+                    const elCenter = rect.top + rect.height / 2;
+                    const dist = Math.abs(elCenter - viewportCenter);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closestIdx = i;
+                    }
+                }
+
+                if (closestIdx !== window.crawlCurrentIndex) {
+                    suppressCrawlScroll = true;
+                    highlightCrawlPrompt(closestIdx);
+                    suppressCrawlScroll = false;
+                }
+            };
+
+            container.addEventListener('scroll', crawlScrollListener, { passive: true });
+        }
+
+        function initStarfield() {
+            const canvas = document.getElementById('starfield');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas size
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            // Create stars
+            const stars = [];
+            const numStars = 200;
+
+            for (let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 1.5,
+                    opacity: Math.random(),
+                    speed: Math.random() * 0.5 + 0.1
+                });
+            }
+
+            function animate() {
+                if (!animationRunning) return;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                stars.forEach(star => {
+                    // Twinkle effect
+                    star.opacity += (Math.random() - 0.5) * 0.02;
+                    star.opacity = Math.max(0.3, Math.min(1, star.opacity));
+
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+                    ctx.fill();
+
+                    // Slow drift
+                    star.y += star.speed;
+                    if (star.y > canvas.height) {
+                        star.y = 0;
+                        star.x = Math.random() * canvas.width;
+                    }
+                });
+
+                starfieldAnimationId = requestAnimationFrame(animate);
+            }
+
+            // Fill canvas with black initially
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            animate();
+        }
+
+        function highlightCrawlPrompt(index) {
+            window.crawlCurrentIndex = index;
+            document.querySelectorAll('.crawl-prompt').forEach((el, i) => {
+                if (i === index) {
+                    el.classList.add('highlighted');
+                    if (!suppressCrawlScroll) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                } else {
+                    el.classList.remove('highlighted');
+                }
+            });
+            // keep live clock (no event-time rendering)
+        }
+
+        function rateCrawlPrompt(promptId, rating) {
+            const prompt = prompts.find(p => p.id === promptId);
+            if (!prompt) return;
+
+            // Toggle off if same rating
+            if (prompt.rating === rating) {
+                rating = null;
+            }
+
+            prompt.rating = rating;
+
+            // Update stars in crawl view
+            const promptDiv = document.querySelector(`[data-prompt-id="${promptId}"]`);
+            if (promptDiv) {
+                promptDiv.querySelectorAll('.crawl-rating-star').forEach((star, i) => {
+                    star.className = (rating && i < rating) ? 'crawl-rating-star filled' : 'crawl-rating-star empty';
+                });
+            }
+
+            // Save to localStorage
+            const ratings = JSON.parse(localStorage.getItem('prompt_ratings') || '{}');
+            if (rating === null) {
+                delete ratings[promptId];
+            } else {
+                ratings[promptId] = rating;
+            }
+            localStorage.setItem('prompt_ratings', JSON.stringify(ratings));
+
+            // Update main timeline
+            contentGroup.selectAll('.prompt-dot')
+                .filter(d => d.id === promptId)
+                .attr('class', d => {
+                    const classes = ['prompt-dot'];
+                    if (rating) {
+                        classes.push(`rating-${rating}`);
+                    } else {
+                        classes.push('unrated');
+                    }
+                    return classes.join(' ');
+                });
+        }
+
+        function navigateCrawl(direction) {
+            if (!window.crawlPrompts || window.crawlPrompts.length === 0) return;
+            
+            const newIndex = window.crawlCurrentIndex + direction;
+            if (newIndex >= 0 && newIndex < window.crawlPrompts.length) {
+                highlightCrawlPrompt(newIndex);
+            }
+        }
+
+        function exitCrawlMode() {
+            animationRunning = false;
+            const crawlMode = document.getElementById('crawl-mode');
+            crawlMode.classList.remove('active');
+
+            // Stop starfield animation
+            if (starfieldAnimationId) {
+                cancelAnimationFrame(starfieldAnimationId);
+            }
+
+            // Stop clock
+            if (crawlClockInterval) {
+                clearInterval(crawlClockInterval);
+            }
+
+            // Clear crawl text
+            document.getElementById('crawl-text').innerHTML = '';
+
+            // Remove scroll sync listener
+            const container = document.querySelector('.crawl-container');
+            if (container && crawlScrollListener) {
+                container.removeEventListener('scroll', crawlScrollListener);
+                crawlScrollListener = undefined;
+            }
+
+            // Restore main timeline
+            selectedPrompts.clear();
+            contentGroup.selectAll('.prompt-dot').classed('selected', false);
+            updateSelectionUI();
+        }
+
         // Initialize
         initTimeline();
 
@@ -806,14 +2545,218 @@
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts if typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Check if in theater mode for arrow key navigation
+            const inTheaterMode = document.getElementById('theater-mode').classList.contains('active');
+
             if (e.key === 'Escape') {
-                closePanel();
+                // Check if in crawl mode
+                if (document.getElementById('crawl-mode').classList.contains('active')) {
+                    exitCrawlMode();
+                } else if (inTheaterMode) {
+                    exitTheaterMode();
+                } else {
+                    closePanel();
+                    if (selectionMode) {
+                        toggleSelection();
+                    }
+                }
+            } else if (inTheaterMode && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                // Navigate between prompts in theater mode
+                e.preventDefault();
+                animationRunning = false; // Stop automatic animation
+                const direction = e.key === 'ArrowRight' ? 1 : -1;
+                navigateTheaterPrompt(direction);
+            } else if (document.getElementById('crawl-mode').classList.contains('active') && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // Navigate in crawl mode
+                e.preventDefault();
+                const direction = e.key === 'ArrowDown' ? 1 : -1;
+                navigateCrawl(direction);
+            } else if (document.getElementById('crawl-mode').classList.contains('active') && ['1', '2', '3', '4', '5'].includes(e.key)) {
+                // Rate in crawl mode
+                e.preventDefault();
+                if (window.crawlPrompts && window.crawlPrompts[window.crawlCurrentIndex]) {
+                    rateCrawlPrompt(window.crawlPrompts[window.crawlCurrentIndex].id, parseInt(e.key));
+                }
+            } else if (inTheaterMode && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // Scroll the prompt text in theater mode
+                e.preventDefault();
+                const promptText = document.getElementById('theater-text');
+                const scrollAmount = 50;
+                promptText.scrollTop += e.key === 'ArrowDown' ? scrollAmount : -scrollAmount;
+            } else if (inTheaterMode && ['1', '2', '3', '4', '5'].includes(e.key)) {
+                // Rate prompt in theater mode
+                e.preventDefault();
+                rateTheaterPrompt(parseInt(e.key));
+            } else if (inTheaterMode && e.key === ' ') {
+                // Toggle auto-play in theater mode
+                e.preventDefault();
+                toggleTheaterAutoplay();
+            } else if (e.key === 's' || e.key === 'S') {
+                e.preventDefault();
+                toggleSelection();
             } else if (e.key === '+' || e.key === '=') {
+                e.preventDefault();
                 zoomIn();
             } else if (e.key === '-' || e.key === '_') {
+                e.preventDefault();
                 zoomOut();
             }
         });
+
+        // Calendar functionality
+        let calendarYear = new Date().getFullYear();
+        let calendarMonth = new Date().getMonth();
+        let promptCountsByDate = {};
+
+        function showCalendar() {
+            // Calculate prompt counts by date
+            calculatePromptCountsByDate();
+
+            // Set to current date
+            const today = new Date();
+            calendarYear = today.getFullYear();
+            calendarMonth = today.getMonth();
+
+            // Render and show calendar
+            renderCalendar();
+            document.getElementById('calendar-view').classList.add('active');
+        }
+
+        function closeCalendar() {
+            document.getElementById('calendar-view').classList.remove('active');
+        }
+
+        function changeCalendarMonth(delta) {
+            calendarMonth += delta;
+            if (calendarMonth > 11) {
+                calendarMonth = 0;
+                calendarYear++;
+            } else if (calendarMonth < 0) {
+                calendarMonth = 11;
+                calendarYear--;
+            }
+            renderCalendar();
+        }
+
+        function calculatePromptCountsByDate() {
+            promptCountsByDate = {};
+            prompts.forEach(p => {
+                const date = new Date(p.timestamp);
+                const dateStr = date.toISOString().split('T')[0];
+                promptCountsByDate[dateStr] = (promptCountsByDate[dateStr] || 0) + 1;
+            });
+        }
+
+        function renderCalendar() {
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            // Update month/year display
+            document.getElementById('calendar-month-year').textContent =
+                `${monthNames[calendarMonth]} ${calendarYear}`;
+
+            // Get first and last day of month
+            const firstDay = new Date(calendarYear, calendarMonth, 1);
+            const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+
+            // Get starting day offset
+            const startOffset = firstDay.getDay();
+
+            // Calculate previous month dates to fill in
+            const prevMonthLastDay = new Date(calendarYear, calendarMonth, 0).getDate();
+
+            // Build calendar grid
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            // Add day headers
+            dayNames.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'calendar-day-header';
+                header.textContent = day;
+                grid.appendChild(header);
+            });
+
+            // Add previous month days
+            for (let i = startOffset - 1; i >= 0; i--) {
+                const day = prevMonthLastDay - i;
+                const prevMonth = calendarMonth === 0 ? 11 : calendarMonth - 1;
+                const prevYear = calendarMonth === 0 ? calendarYear - 1 : calendarYear;
+                addDayCell(grid, day, prevMonth, prevYear, true);
+            }
+
+            // Add current month days
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                addDayCell(grid, day, calendarMonth, calendarYear, false);
+            }
+
+            // Add next month days to fill the grid
+            const cellsUsed = startOffset + lastDay.getDate();
+            const remainingCells = Math.ceil(cellsUsed / 7) * 7 - cellsUsed;
+            for (let day = 1; day <= remainingCells; day++) {
+                const nextMonth = calendarMonth === 11 ? 0 : calendarMonth + 1;
+                const nextYear = calendarMonth === 11 ? calendarYear + 1 : calendarYear;
+                addDayCell(grid, day, nextMonth, nextYear, true);
+            }
+        }
+
+        function addDayCell(grid, day, month, year, isOtherMonth) {
+            const cell = document.createElement('div');
+            cell.className = 'calendar-day';
+
+            if (isOtherMonth) {
+                cell.classList.add('other-month');
+            }
+
+            // Check if today
+            const today = new Date();
+            if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
+                cell.classList.add('today');
+            }
+
+            // Get date string
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const promptCount = promptCountsByDate[dateStr] || 0;
+
+            // Set background color based on prompt density
+            if (promptCount > 0) {
+                const maxCount = Math.max(...Object.values(promptCountsByDate));
+                const opacity = Math.min(1, Math.max(0.3, promptCount / maxCount));
+                cell.style.background = `rgba(249, 115, 22, ${opacity})`;
+            }
+
+            // Add content
+            const dayNumber = document.createElement('div');
+            dayNumber.className = 'calendar-day-number';
+            dayNumber.textContent = day;
+            cell.appendChild(dayNumber);
+
+            if (promptCount > 0) {
+                const countLabel = document.createElement('div');
+                countLabel.className = 'calendar-day-count';
+                countLabel.textContent = `${promptCount} prompt${promptCount !== 1 ? 's' : ''}`;
+                cell.appendChild(countLabel);
+            }
+
+            // Add click handler
+            cell.addEventListener('click', () => {
+                if (promptCount > 0) {
+                    closeCalendar();
+                    loadDate(dateStr);
+                }
+            });
+
+            // Add hover handler for tooltip
+            cell.title = `${dateStr}: ${promptCount} prompt${promptCount !== 1 ? 's' : ''}`;
+
+            grid.appendChild(cell);
+        }
     </script>
 </body>
 </html>

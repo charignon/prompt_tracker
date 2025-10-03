@@ -147,6 +147,21 @@ Ideas for contributions:
 - AI-powered prompt clustering
 - Prompt template extraction
 
+## 🎬 Demo Recording
+
+Automated scripts to capture screenshots and video for documentation:
+
+```bash
+# Record everything (video + screenshots)
+./record_all.sh
+
+# Or run individually:
+./record_demo.py              # Web interface demo
+./capture_cli_screenshot.sh   # CLI screenshot
+```
+
+See [DEMO_RECORDING.md](DEMO_RECORDING.md) for details.
+
 ## 📄 License
 
 MIT
