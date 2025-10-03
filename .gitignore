@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+
+# JSONL files (history data)
+*.jsonl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Screenshots and recordings
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.webm

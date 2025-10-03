@@ -228,10 +228,7 @@
             -moz-user-select: none;
         }
 
-        .grid line {
-            stroke: #2a2a2a;
-            stroke-opacity: 0.5;
-        }
+        /* Grid line styles are set inline based on midnight detection */
 
         #side-panel {
             width: 0;
@@ -937,24 +934,14 @@
                         <button class="date-nav-btn" onclick="changeDate(1)" title="Next day">→</button>
                     </div>
                     <div class="control-group">
-                        <span class="control-label" style="color: #888;">Viewing:</span>
-                        <span id="visible-range-display" style="color: #aaa; font-size: 12px; font-family: monospace; white-space: nowrap;">Loading...</span>
-                    </div>
-                    <div class="control-group">
-                        <span class="control-label">Project:</span>
-                        <select id="project-filter" onchange="filterByProject(this.value)">
-                            <option value="">All Projects</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
                         <span class="control-label">Zoom:</span>
                         <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">−</button>
                         <span id="zoom-level-display">100%</span>
                         <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
                     </div>
-                    <button class="zoom-btn" id="reorder-btn" onclick="refreshTimeline()" title="Reorder projects by activity in visible range">
-                        🔄 Reorder
-                        <span id="hidden-projects-badge" style="display: none; margin-left: 4px; background: #f97316; color: white; border-radius: 10px; padding: 2px 6px; font-size: 10px; font-weight: bold;"></span>
+                    <button class="zoom-btn" id="reorder-btn" onclick="refreshTimeline()" title="Rerank projects by activity in visible range">
+                        Rerank
+                        <span id="project-count-badge" style="margin-left: 4px; color: white; border-radius: 10px; padding: 2px 6px; font-size: 10px; font-weight: bold;"></span>
                     </button>
                     <button class="zoom-btn" id="select-btn" onclick="toggleSelection()" title="Select prompts (drag to select) • Press S">⬚ Select</button>
                     <div class="actions-group">
@@ -963,6 +950,20 @@
                         <button class="zoom-btn" id="animate-10x-btn" onclick="animate10x()" title="Quick preview - 10x speed" style="display:none;">▶ 10x</button>
                         <button class="zoom-btn" id="animate-crawl-btn" onclick="animateCrawl()" title="Opening crawl - scrolling text" style="display:none;">⭐ Crawl</button>
                         <span id="selection-count" style="display:none; margin-left: 8px; color: #888; font-size: 12px;"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-row" style="margin-top: 5px;">
+                <div class="controls">
+                    <div class="control-group">
+                        <span class="control-label" style="color: #888;">Viewing:</span>
+                        <span id="visible-range-display" style="color: #aaa; font-size: 12px; font-family: monospace; white-space: nowrap;">Loading...</span>
+                    </div>
+                    <div class="control-group">
+                        <span class="control-label">Project:</span>
+                        <select id="project-filter" onchange="filterByProject(this.value)">
+                            <option value="">All Projects</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -1070,10 +1071,11 @@
         let theaterPrompts = [];  // Prompts being shown in theater mode
         let theaterCurrentIndex = 0;  // Current prompt index in theater mode
         let theaterDuration = 120000;  // Duration for theater animation (default 2 minutes)
+        let autoRerankTimeout = null;  // Timeout for auto-rerank after inactivity
 
         // D3 visualization variables
         let svg, g, contentGroup, xScale, yScale, zoom, xAxis;
-        const margin = {top: 40, right: 40, bottom: 60, left: 80};
+        const margin = {top: 50, right: 40, bottom: 60, left: 150};
 
         // All prompts loaded at once - no lazy loading
 
@@ -1103,8 +1105,8 @@
             return a.project.localeCompare(b.project);
         });
 
-        // Auto-select top 15 projects by prompt count (most to least)
-        let projects = projectCounts.slice(0, 15).map(pc => pc.project);
+        // Show all projects ordered by prompt count (most to least)
+        let projects = projectCounts.map(pc => pc.project);
         let isFiltered = false;
 
         // Populate project filter
@@ -1214,7 +1216,7 @@
             // Project scale (Y axis) - already calculated above
             yScale = d3.scaleBand()
                 .domain(visibleProjects)
-                .range([0, virtualHeight])
+                .range([15, virtualHeight])  // Start 15px below to avoid clipping first project
                 .padding(0.3);
 
             // Update the clipped area height to match virtual height
@@ -1271,16 +1273,22 @@
                 })
                 .on('start', function(event) {
                     // Store starting position
-                    this.dragStart = { x: event.x, transformX: currentTransform.x };
+                    const container = document.getElementById('timeline-scroll-container');
+                    this.dragStart = {
+                        x: event.x,
+                        y: event.y,
+                        transformX: currentTransform.x,
+                        scrollTop: container.scrollTop
+                    };
                 })
                 .on('drag', function(event) {
                     if (!this.dragStart) return;
 
-                    // Calculate pan amount
+                    // Calculate horizontal pan amount
                     const dx = event.x - this.dragStart.x;
                     const newX = this.dragStart.transformX + dx;
 
-                    // Apply constraints
+                    // Apply constraints for horizontal
                     const maxPan = innerWidth * 0.1;
                     const contentWidth = innerWidth * currentTransform.k;
                     const minPan = innerWidth - contentWidth - (innerWidth * 0.1);
@@ -1292,6 +1300,11 @@
 
                     // Apply transform immediately
                     zoomed({ transform: currentTransform });
+
+                    // Calculate vertical scroll amount
+                    const dy = event.y - this.dragStart.y;
+                    const container = document.getElementById('timeline-scroll-container');
+                    container.scrollTop = this.dragStart.scrollTop - dy;
                 })
                 .on('end', function(event) {
                     delete this.dragStart;
@@ -1300,6 +1313,9 @@
             // Apply zoom and drag
             svg.call(zoom);
             svg.call(drag);
+
+            // If we skipped initial transform, the caller will restore the saved transform
+            // Do nothing here to avoid triggering zoom events
 
             // Add grid lines for all hours in the wide domain (inside clipped area)
             const gridGroup = contentGroup.append('g')
@@ -1324,9 +1340,9 @@
                     .attr('y1', 0)
                     .attr('y2', virtualHeight)
                     .attr('stroke', isMidnight ? '#ffffff' : '#2a2a2a')
-                    .attr('stroke-opacity', isMidnight ? 0.9 : (isToday ? 0.3 : 0.2))
-                    .attr('stroke-width', isMidnight ? 2 : 1)
-                    .attr('stroke-dasharray', isMidnight ? '5,5' : null);
+                    .attr('stroke-opacity', isMidnight ? 0.5 : (isToday ? 0.3 : 0.2))
+                    .attr('stroke-width', isMidnight ? 4 : 1)
+                    .attr('stroke-dasharray', isMidnight ? '10,5' : null);
 
                 currentGridDate.setHours(currentGridDate.getHours() + 1);
             }
@@ -1344,11 +1360,11 @@
                 .attr('stroke-opacity', 0.8)
                 .attr('stroke-dasharray', '5,5');
 
-            // Add X axis with time ticks (outside clipped area)
+            // Add X axis with time ticks at top (outside clipped area)
             xAxis = g.append('g')
                 .attr('class', 'axis')
-                .attr('transform', `translate(0,${innerHeight})`)
-                .call(d3.axisBottom(xScale)
+                .attr('transform', `translate(0,0)`)
+                .call(d3.axisTop(xScale)
                     .ticks(d3.timeHour.every(2))
                     .tickFormat(d3.timeFormat('%H:%M')));
 
@@ -1366,31 +1382,31 @@
                     .attr('stroke', projectColors[project])
                     .attr('stroke-opacity', 0.3);
 
-                // Track label (outside clipped area for visibility) - use foreignObject for text wrapping
+                // Track label - simple gray text
                 const labelText = project.split('/').pop() || project;
-                const labelWidth = 120; // Width for label area
+                const labelWidth = 140;
                 const labelHeight = yScale.bandwidth();
 
                 const labelGroup = g.append('foreignObject')
                     .attr('x', -labelWidth - 5)
                     .attr('y', y - labelHeight / 2)
                     .attr('width', labelWidth)
-                    .attr('height', labelHeight)
-                    .append('xhtml:div')
-                    .style('width', '100%')
-                    .style('height', '100%')
+                    .attr('height', labelHeight);
+
+                labelGroup.append('xhtml:div')
+                    .style('color', '#888')
+                    .style('font-size', '11px')
+                    .style('text-align', 'right')
+                    .style('padding-right', '5px')
+                    .style('white-space', 'nowrap')
+                    .style('overflow', 'hidden')
+                    .style('text-overflow', 'ellipsis')
                     .style('display', 'flex')
                     .style('align-items', 'center')
                     .style('justify-content', 'flex-end')
-                    .style('font-size', '11px')
-                    .style('font-family', 'monospace')
-                    .style('color', '#666')
-                    .style('text-align', 'right')
-                    .style('line-height', '1.2')
-                    .style('word-break', 'break-word')
-                    .style('overflow', 'hidden')
-                    .attr('title', project)
-                    .text(labelText);
+                    .style('height', '100%')
+                    .text(labelText)
+                    .attr('title', project);
             });
 
             // Add prompts
@@ -1511,13 +1527,25 @@
             }
 
             // Update axis with adaptive ticks
-            xAxis.call(d3.axisBottom(newXScale)
+            xAxis.call(d3.axisTop(newXScale)
                 .ticks(tickInterval)
                 .tickFormat(tickFormat));
 
-            // Update dots X position only
+            // Update dots X position and opacity based on viewport visibility
+            const container = document.getElementById('timeline-scroll-container');
+            const viewportWidth = container.clientWidth - margin.left - margin.right;
+
             contentGroup.selectAll('.prompt-dot')
-                .attr('cx', d => newXScale(new Date(d.timestamp)));
+                .attr('cx', d => newXScale(new Date(d.timestamp)))
+                .attr('opacity', function(d) {
+                    const cx = newXScale(new Date(d.timestamp));
+                    // Full opacity if in viewport, faded if outside
+                    if (cx >= 0 && cx <= viewportWidth) {
+                        return 1;
+                    } else {
+                        return 0.15;
+                    }
+                });
 
             // Update now line X position
             const now = new Date();
@@ -1551,8 +1579,7 @@
 
             // Update visible range display - compact format on one line
             // Calculate what's actually visible in the viewport (0 to innerWidth)
-            const container = document.getElementById('timeline-scroll-container');
-            const viewportWidth = container.clientWidth - margin.left - margin.right;
+            // Reuse viewportWidth from above
             const startDate = newXScale.invert(0);
             const endDate = newXScale.invert(viewportWidth);
 
@@ -1567,6 +1594,68 @@
 
             const rangeText = `${formatCompact(startDate)} → ${formatCompact(endDate)}`;
             document.getElementById('visible-range-display').textContent = rangeText;
+
+            // Update project count badge
+            const visibleStartTs = startDate.getTime();
+            const visibleEndTs = endDate.getTime();
+            const visiblePrompts = prompts.filter(p => p.timestamp >= visibleStartTs && p.timestamp <= visibleEndTs);
+            const projectsWithData = new Set(visiblePrompts.map(p => p.project || 'unknown'));
+            const projectCount = projectsWithData.size;
+
+            const badge = document.getElementById('project-count-badge');
+            badge.textContent = projectCount;
+
+            // Color based on thresholds
+            if (projectCount < 12) {
+                badge.style.background = '#27ae60'; // green
+            } else if (projectCount <= 16) {
+                badge.style.background = '#f39c12'; // orange
+            } else {
+                badge.style.background = '#e74c3c'; // red
+            }
+
+            // Auto-rerank after 500ms of inactivity (but not in selection mode)
+            if (autoRerankTimeout) {
+                clearTimeout(autoRerankTimeout);
+            }
+            if (!selectionMode) {
+                autoRerankTimeout = setTimeout(() => {
+                    // Check if rerank would actually change anything
+                    const currentVisibleStartTs = startDate.getTime();
+                    const currentVisibleEndTs = endDate.getTime();
+                    const currentVisiblePrompts = prompts.filter(p => p.timestamp >= currentVisibleStartTs && p.timestamp <= currentVisibleEndTs);
+
+                    // Group by project
+                    const currentProjectGroups = {};
+                    currentVisiblePrompts.forEach(prompt => {
+                        const project = prompt.project || 'unknown';
+                        if (!currentProjectGroups[project]) {
+                            currentProjectGroups[project] = [];
+                        }
+                        currentProjectGroups[project].push(prompt);
+                    });
+
+                    // Get new order
+                    const newProjectCounts = Object.keys(currentProjectGroups).map(project => ({
+                        project: project,
+                        count: currentProjectGroups[project].length
+                    }));
+                    newProjectCounts.sort((a, b) => {
+                        if (b.count !== a.count) return b.count - a.count;
+                        return a.project.localeCompare(b.project);
+                    });
+                    const newOrder = newProjectCounts.map(pc => pc.project);
+
+                    // Check if order changed
+                    const currentOrder = projects.slice(0, newOrder.length);
+                    const orderChanged = newOrder.length !== currentOrder.length ||
+                        newOrder.some((p, i) => p !== currentOrder[i]);
+
+                    if (orderChanged) {
+                        refreshTimeline();
+                    }
+                }, 500);
+            }
         }
 
         function zoomIn() {
@@ -1604,25 +1693,47 @@
         }
 
         function filterByProject(project) {
-            // Save current viewport position
-            const container = document.getElementById('timeline-scroll-container');
-            const savedScrollTop = container.scrollTop;
-            const savedTransform = svg ? d3.zoomTransform(svg.node()) : d3.zoomIdentity;
-
+            // SAFE VERSION: Don't touch viewport at all
             currentProjectFilter = project;
-            initTimeline(true); // Skip initial transform
 
-            // Restore viewport position
-            if (svg && zoom) {
-                svg.call(zoom.transform, savedTransform);
+            // Just update which projects are visible
+            const visibleProjectsToShow = project ? [project] : projects;
+
+            const container = document.getElementById('timeline-scroll-container');
+            const height = container.clientHeight;
+            const innerHeight = height - margin.top - margin.bottom;
+            const minProjectHeight = 35;
+            const maxProjectHeight = innerHeight / Math.max(1, visibleProjectsToShow.length);
+            const projectHeight = Math.max(minProjectHeight, maxProjectHeight);
+
+            yScale.domain(visibleProjectsToShow).range([15, visibleProjectsToShow.length * projectHeight]);
+
+            // Update y-axis
+            const yAxisGroup = g.select('.y-axis');
+            if (yAxisGroup.size() > 0) {
+                yAxisGroup.call(d3.axisLeft(yScale));
             }
-            container.scrollTop = savedScrollTop;
+
+            // Update dots and track lines positions
+            contentGroup.selectAll('.prompt-dot')
+                .style('display', d => {
+                    if (project && (d.project || 'unknown') !== project) return 'none';
+                    return 'block';
+                })
+                .attr('cy', d => yScale(d.project || 'unknown') + yScale.bandwidth() / 2);
+
+            contentGroup.selectAll('.track-line')
+                .style('display', d => {
+                    if (project && d !== project) return 'none';
+                    return 'block';
+                })
+                .attr('y1', d => yScale(d) + yScale.bandwidth() / 2)
+                .attr('y2', d => yScale(d) + yScale.bandwidth() / 2);
         }
 
         function refreshTimeline() {
-            // Save current position and zoom
+            // SAFE VERSION: Only reorder projects, don't touch viewport at all
             const container = document.getElementById('timeline-scroll-container');
-            const savedScrollTop = container.scrollTop;
             const savedTransform = svg ? d3.zoomTransform(svg.node()) : d3.zoomIdentity;
 
             // Get visible time range from current viewport
@@ -1648,7 +1759,7 @@
                 visibleProjectGroups[project].push(prompt);
             });
 
-            // Get top 15 projects by count in visible range
+            // Get projects by count in visible range
             const visibleProjects = Object.keys(visibleProjectGroups);
             const projectCounts = visibleProjects.map(project => ({
                 project: project,
@@ -1661,34 +1772,107 @@
                 return a.project.localeCompare(b.project);
             });
 
-            // Take top 15 projects in visible range (most to least prompts)
-            projects = projectCounts.slice(0, 15).map(pc => pc.project);
-            isFiltered = true;
+            // Smart reranking: Preserve positions to minimize disruption
+            const topN = 15; // How many to track
+            const sorted = projectCounts.map(pc => pc.project);
+            const newTopNSet = new Set(sorted.slice(0, topN));
+            const prevTopNSet = new Set(projects.slice(0, topN));
+
+            // Check if top N is the same (just different order within it)
+            if (newTopNSet.size === prevTopNSet.size &&
+                [...newTopNSet].every(p => prevTopNSet.has(p))) {
+                console.log('Top N unchanged - no reorder needed');
+                return;
+            }
+
+            // Build new order: preserve positions of projects still in top N
+            const result = [];
+            const used = new Set();
+
+            // First pass: keep projects in their original position if still in top N
+            for (let i = 0; i < topN; i++) {
+                const prevProject = projects[i];
+                if (prevProject && newTopNSet.has(prevProject)) {
+                    result[i] = prevProject;
+                    used.add(prevProject);
+                }
+            }
+
+            // Second pass: fill empty slots with new projects (sorted by count)
+            let sortedIndex = 0;
+            for (let i = 0; i < topN; i++) {
+                if (!result[i]) {
+                    // Find next unused project from sorted list
+                    while (sortedIndex < sorted.length && used.has(sorted[sortedIndex])) {
+                        sortedIndex++;
+                    }
+                    if (sortedIndex < sorted.length) {
+                        result[i] = sorted[sortedIndex];
+                        used.add(sorted[sortedIndex]);
+                        sortedIndex++;
+                    }
+                }
+            }
+
+            // Update order
+            projects = result.filter(p => p); // Remove any undefined
 
             // Debug: log the ordering
-            console.log('Reordered projects (most to least):', projectCounts.slice(0, 15).map(pc => `${pc.project}: ${pc.count}`));
+            console.log('Reranked projects (most to least):', projectCounts.map(pc => `${pc.project}: ${pc.count}`));
 
             // Update project filter dropdown
             populateProjectFilter();
 
-            // Reset project filter to show all (of the filtered 15)
-            currentProjectFilter = '';
-            projectFilter.value = '';
+            // DON'T call initTimeline - that breaks everything
+            // Instead, just update the y-scale domain and redraw
+            const visibleProjectsToShow = currentProjectFilter ? [currentProjectFilter] : projects;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const innerHeight = height - margin.top - margin.bottom;
+            const minProjectHeight = 35;
+            const maxProjectHeight = innerHeight / Math.max(1, visibleProjectsToShow.length);
+            const projectHeight = Math.max(minProjectHeight, maxProjectHeight);
 
-            // Reinitialize timeline (skip initial transform so we can restore saved position)
-            initTimeline(true);
+            yScale.domain(visibleProjectsToShow).range([15, visibleProjectsToShow.length * projectHeight]);
 
-            // Restore position and zoom
-            if (svg && zoom) {
-                svg.call(zoom.transform, savedTransform);
-            }
-            container.scrollTop = savedScrollTop;
+            // Recreate project labels to avoid overlapping
+            g.selectAll('foreignObject').remove();
 
-            // Update stats (no filtering message since we show all projects)
-            const statsEl = document.getElementById('stats');
-            const originalStats = statsEl.textContent;
-            const baseStats = originalStats.split('(')[0].trim();
-            statsEl.textContent = baseStats;
+            visibleProjectsToShow.forEach(project => {
+                const y = yScale(project) + yScale.bandwidth() / 2;
+                const labelText = project.split('/').pop() || project;
+                const labelWidth = 140;
+                const labelHeight = yScale.bandwidth();
+
+                const labelGroup = g.append('foreignObject')
+                    .attr('x', -labelWidth - 5)
+                    .attr('y', y - labelHeight / 2)
+                    .attr('width', labelWidth)
+                    .attr('height', labelHeight);
+
+                labelGroup.append('xhtml:div')
+                    .style('color', '#888')
+                    .style('font-size', '11px')
+                    .style('text-align', 'right')
+                    .style('padding-right', '5px')
+                    .style('white-space', 'nowrap')
+                    .style('overflow', 'hidden')
+                    .style('text-overflow', 'ellipsis')
+                    .style('display', 'flex')
+                    .style('align-items', 'center')
+                    .style('justify-content', 'flex-end')
+                    .style('height', '100%')
+                    .text(labelText)
+                    .attr('title', project);
+            });
+
+            // Update all visual elements with new y positions without changing x
+            contentGroup.selectAll('.prompt-dot')
+                .attr('cy', d => yScale(d.project || 'unknown') + yScale.bandwidth() / 2);
+
+            contentGroup.selectAll('.track-line')
+                .attr('y1', d => yScale(d) + yScale.bandwidth() / 2)
+                .attr('y2', d => yScale(d) + yScale.bandwidth() / 2);
         }
 
         function showTooltip(event, d) {
@@ -1848,16 +2032,19 @@
                 .attr('class', 'brush')
                 .call(brush);
 
-            // Disable zoom while brushing
-            svg.on('.zoom', null);
+            // Disable zoom while brushing - use filter to suppress events
+            zoom.filter(function() { return false; });
         }
 
         function disableBrush() {
             contentGroup.select('.brush').remove();
             brush = null;
 
-            // Re-enable zoom
-            svg.call(zoom);
+            // Re-enable zoom by removing the filter
+            zoom.filter(function(event) {
+                // Default zoom filter logic
+                return (!event.ctrlKey || event.type === 'wheel') && !event.button;
+            });
         }
 
         function brushEnded(event) {
@@ -1866,8 +2053,10 @@
 
             selectedPrompts.clear();
 
-            // Get current transform
+            // Save current transform and scroll position
             const transform = d3.zoomTransform(svg.node());
+            const container = document.getElementById('timeline-scroll-container');
+            const savedScrollTop = container.scrollTop;
             const newXScale = transform.rescaleX(xScale);
 
             // Find dots within selection
@@ -1887,6 +2076,7 @@
             // Clear the brush selection rectangle but keep the dots selected
             contentGroup.select('.brush').call(brush.move, null);
 
+            // Don't touch viewport - scroll position is already correct from drag behavior
             updateSelectionUI();
         }
 
@@ -2859,9 +3049,22 @@
 
         // No filtering - showing all projects and prompts
 
-        // Handle window resize
+        // Handle window resize - preserve viewport
         window.addEventListener('resize', () => {
-            initTimeline();
+            const savedTransform = svg ? d3.zoomTransform(svg.node()) : null;
+            const container = document.getElementById('timeline-scroll-container');
+            const savedScrollTop = container ? container.scrollTop : 0;
+
+            initTimeline(true); // Skip initial transform
+
+            // Restore viewport
+            if (savedTransform && svg && zoom) {
+                svg.node().__zoom = savedTransform;
+                zoomed({ transform: savedTransform });
+            }
+            if (container) {
+                container.scrollTop = savedScrollTop;
+            }
         });
 
         // Keyboard shortcuts
@@ -2876,14 +3079,23 @@
             const inCrawlMode = document.getElementById('crawl-mode').classList.contains('active');
 
             // Arrow key panning on timeline (when not in theater/crawl mode)
-            if (!inTheaterMode && !inCrawlMode && svg && zoom && currentTransform) {
+            if (!inTheaterMode && !inCrawlMode) {
                 if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                     e.preventDefault();
-                    const panAmount = (e.key === 'ArrowRight' ? -200 : 200) * currentTransform.k; // Pan scaled to zoom level
-                    const newTransform = d3.zoomIdentity
-                        .translate(currentTransform.x + panAmount, 0)
-                        .scale(currentTransform.k);
-                    svg.call(zoom.transform, newTransform);
+                    if (svg && zoom) {
+                        const transform = d3.zoomTransform(svg.node());
+                        const panAmount = (e.key === 'ArrowRight' ? -200 : 200) * transform.k;
+                        const newTransform = d3.zoomIdentity
+                            .translate(transform.x + panAmount, 0)
+                            .scale(transform.k);
+                        svg.call(zoom.transform, newTransform);
+                    }
+                    return;
+                } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const container = document.getElementById('timeline-scroll-container');
+                    const scrollAmount = 200;
+                    container.scrollTop += e.key === 'ArrowDown' ? scrollAmount : -scrollAmount;
                     return;
                 }
             }
@@ -2938,9 +3150,6 @@
                 // Toggle auto-play in theater mode
                 e.preventDefault();
                 toggleTheaterAutoplay();
-            } else if (e.key === 's' || e.key === 'S') {
-                e.preventDefault();
-                toggleSelection();
             } else if (e.key === '+' || e.key === '=') {
                 e.preventDefault();
                 zoomIn();

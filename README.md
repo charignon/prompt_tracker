@@ -20,8 +20,8 @@ Ever wonder what patterns emerge from your AI conversations? Prompt Tracker mine
 
 **Knowledge Management** - Never lose a great prompt:
 - 📝 Add notes and context to prompts
-- 🔗 Publish to Memento for long-term storage
 - 🎯 Tag and categorize for easy retrieval
+- 💾 Export and share your best prompts
 
 ## 🚀 Quick Start
 
@@ -34,7 +34,10 @@ chmod +x prompt-tracker
 # Sync your Claude history
 ./prompt-tracker sync
 
-# Generate today's timeline (auto-opens in browser)
+# Start web interface (recommended)
+./prompt-tracker serve
+
+# Or generate a static timeline (auto-opens in browser)
 ./prompt-tracker timeline 2025-10-02
 
 # Rate your favorite prompts
@@ -43,11 +46,22 @@ chmod +x prompt-tracker
 
 ## 📸 Features
 
+### Web Interface
+```bash
+prompt-tracker serve
+```
+Launch the interactive web interface with:
+- Real-time timeline visualization
+- Live filtering and search
+- Prompt rating and management
+- Adaptive zoom controls
+- Multiple view modes (clock/timeline)
+
 ### Timeline Visualization
 ```bash
 prompt-tracker timeline 2025-10-02
 ```
-Creates an interactive HTML timeline showing:
+Creates a static interactive HTML timeline showing:
 - Every prompt as a bubble sized by length
 - Color-coded quality indicators
 - Project-based swim lanes
@@ -86,7 +100,7 @@ Rating distribution:
 ## 🎯 Use Cases
 
 - **Learn from your best prompts** - Review 5-star prompts to spot patterns
-- **Build a prompt library** - Export winners to Memento or your knowledge base
+- **Build a prompt library** - Export winners to your knowledge base
 - **Track productivity** - Visualize when you're most productive with Claude
 - **Debug prompt engineering** - Compare what works vs what doesn't
 
@@ -112,14 +126,14 @@ ln -s $(pwd)/prompt-tracker ~/bin/prompt-tracker
 
 | Command | Description |
 |---------|-------------|
+| `serve` | Start web interface server |
 | `sync` | Import prompts from ~/.claude/history.jsonl |
 | `list` | List prompts with filters |
 | `rate <id> <1-5>` | Rate a prompt |
 | `note <id> <text>` | Add note to prompt |
 | `show <id>` | Show full prompt details |
 | `stats` | Display statistics |
-| `timeline <date>` | Generate interactive timeline |
-| `publish <id>` | Export to Memento |
+| `timeline <date>` | Generate static interactive timeline |
 
 ## 🎨 Word Cloud Generation
 

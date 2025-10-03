@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Smart Reordering</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .test { margin: 20px 0; padding: 10px; border: 1px solid #444; }
+        .pass { background: #1a4d1a; }
+        .fail { background: #4d1a1a; }
+        pre { background: #0a0a0a; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Smart Reordering Algorithm Test</h1>
+    <div id="results"></div>
+
+    <script>
+        function smartReorder(previousOrder, newCounts, topN = 10) {
+            // Get top N projects by count
+            const sorted = Object.entries(newCounts)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, topN)
+                .map(([project]) => project);
+
+            const newTopNSet = new Set(sorted);
+            const prevTopNSet = new Set(previousOrder.slice(0, topN));
+
+            // Check if top N is the same (just different order)
+            if (newTopNSet.size === prevTopNSet.size &&
+                [...newTopNSet].every(p => prevTopNSet.has(p))) {
+                return previousOrder; // No change
+            }
+
+            // Build new order: preserve positions of projects still in top N
+            const result = [];
+            const used = new Set();
+
+            // First pass: keep projects in their original position if still in top N
+            for (let i = 0; i < topN; i++) {
+                const prevProject = previousOrder[i];
+                if (prevProject && newTopNSet.has(prevProject)) {
+                    result[i] = prevProject;
+                    used.add(prevProject);
+                }
+            }
+
+            // Second pass: fill empty slots with new projects
+            let sortedIndex = 0;
+            for (let i = 0; i < topN; i++) {
+                if (!result[i]) {
+                    // Find next unused project from sorted list
+                    while (sortedIndex < sorted.length && used.has(sorted[sortedIndex])) {
+                        sortedIndex++;
+                    }
+                    if (sortedIndex < sorted.length) {
+                        result[i] = sorted[sortedIndex];
+                        used.add(sorted[sortedIndex]);
+                        sortedIndex++;
+                    }
+                }
+            }
+
+            return result.filter(p => p); // Remove any undefined
+        }
+
+        function runTest(name, previousOrder, newCounts, expected, description) {
+            const result = smartReorder(previousOrder, newCounts);
+            const pass = JSON.stringify(result) === JSON.stringify(expected);
+
+            const div = document.createElement('div');
+            div.className = `test ${pass ? 'pass' : 'fail'}`;
+            div.innerHTML = `
+                <h3>${pass ? '✓' : '✗'} ${name}</h3>
+                <p>${description}</p>
+                <pre>Previous: [${previousOrder.join(', ')}]
+Counts:   ${JSON.stringify(newCounts, null, 2)}
+Expected: [${expected.join(', ')}]
+Got:      [${result.join(', ')}]</pre>
+            `;
+            document.getElementById('results').appendChild(div);
+        }
+
+        // Test 1: Same top N, just different counts - should NOT reorder
+        runTest(
+            'Test 1: Same top N',
+            ['A', 'B', 'C', 'D', 'E'],
+            { A: 10, B: 9, C: 8, D: 7, E: 6 },
+            ['A', 'B', 'C', 'D', 'E'],
+            'Top N unchanged, keep same order'
+        );
+
+        // Test 2: New project enters top N - preserve positions of existing
+        runTest(
+            'Test 2: New project F enters',
+            ['A', 'B', 'C', 'D', 'E'],
+            { A: 10, B: 9, F: 15, C: 8, D: 7 },
+            ['A', 'B', 'C', 'D', 'F'],
+            'F is new top project but A,B,C,D keep their positions. F takes E\'s spot'
+        );
+
+        // Test 3: Project drops out of top N
+        runTest(
+            'Test 3: A drops out, F enters',
+            ['A', 'B', 'C', 'D', 'E'],
+            { B: 9, C: 8, D: 7, E: 6, F: 12 },
+            ['F', 'B', 'C', 'D', 'E'],
+            'A gone, F enters. B,C,D,E keep positions. F takes A\'s spot'
+        );
+
+        // Test 4: Multiple new projects
+        runTest(
+            'Test 4: Multiple changes',
+            ['A', 'B', 'C', 'D', 'E'],
+            { B: 15, C: 12, F: 20, G: 18, H: 10 },
+            ['F', 'B', 'C', 'G', 'H'],
+            'Only B and C remain. They keep positions. F,G,H fill gaps'
+        );
+
+        // Test 5: Completely new top N
+        runTest(
+            'Test 5: Complete replacement',
+            ['A', 'B', 'C'],
+            { X: 10, Y: 9, Z: 8 },
+            ['X', 'Y', 'Z'],
+            'No overlap, use new sorted order'
+        );
+
+        // Test 6: One project persists
+        runTest(
+            'Test 6: One survivor',
+            ['A', 'B', 'C', 'D', 'E'],
+            { A: 5, X: 20, Y: 18, Z: 15, W: 12 },
+            ['A', 'X', 'Y', 'Z', 'W'],
+            'Only A remains in same position, others fill in sorted by count'
+        );
+    </script>
+</body>
+</html>

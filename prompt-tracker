@@ -220,6 +220,26 @@ class PromptTracker:
             'distribution': distribution
         }
 
+    def get_all_prompts(self, include_slash_commands: bool = False) -> List:
+        """Get all prompts"""
+        cursor = self.conn.cursor()
+
+        query = """
+            SELECT p.id, p.timestamp, p.display, p.project,
+                   m.rating, m.note
+            FROM prompts p
+            LEFT JOIN prompt_metadata m ON p.id = m.prompt_id
+            WHERE 1=1
+        """
+
+        if not include_slash_commands:
+            query += " AND p.display NOT LIKE '/login%' AND p.display NOT LIKE '/logout%'"
+
+        query += " ORDER BY p.timestamp ASC"
+
+        cursor.execute(query)
+        return cursor.fetchall()
+
     def get_prompts_by_date(self, date_from: str, date_to: Optional[str] = None,
                            include_slash_commands: bool = False) -> List:
         """Get all prompts for a specific date or date range"""
@@ -435,8 +455,38 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
             tracker.sync(DEFAULT_HISTORY_PATH)
 
             # Validate date format
-            datetime.strptime(date, '%Y-%m-%d')
-            html = tracker.generate_timeline_html_content(date)
+            date_dt = datetime.strptime(date, '%Y-%m-%d')
+
+            # Load ALL prompts for infinite panning
+            all_prompts = tracker.get_all_prompts(include_slash_commands=False)
+
+            # Prepare data for JavaScript
+            prompts_data = []
+            for p in all_prompts:
+                prompts_data.append({
+                    'id': p['id'],
+                    'timestamp': p['timestamp'],
+                    'display': p['display'],
+                    'project': p['project'],
+                    'rating': p['rating'],
+                    'note': p['note']
+                })
+
+            # Read template
+            template_path = Path(__file__).parent / "prompt_timeline_template.html"
+            with open(template_path, 'r') as f:
+                template = f.read()
+
+            # Generate stats
+            date_range = f"All prompts (viewing {date})"
+            stats = f"{len(prompts_data)} total prompts"
+
+            # Replace placeholders
+            import json
+            html = template.replace('{{DATE_RANGE}}', date_range)
+            html = html.replace('{{STATS}}', stats)
+            html = html.replace('{{CURRENT_DATE}}', date)
+            html = html.replace('{{PROMPTS_DATA}}', json.dumps(prompts_data))
 
             # Modify the loadDate function to navigate in the web interface
             html = html.replace(
@@ -449,6 +499,47 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
             return "Invalid date format. Use YYYY-MM-DD", 400
         except Exception as e:
             return f"Error generating timeline: {str(e)}", 500
+        finally:
+            tracker.close()
+
+    @app.route('/api/prompts/range', methods=['GET'])
+    def get_prompts_range():
+        """API endpoint to fetch prompts for a timestamp range"""
+        tracker = get_tracker()
+        try:
+            start_ts = request.args.get('start', type=int)
+            end_ts = request.args.get('end', type=int)
+
+            if start_ts is None or end_ts is None:
+                return jsonify({'error': 'Missing start or end timestamp'}), 400
+
+            cursor = tracker.conn.cursor()
+            query = """
+                SELECT p.id, p.timestamp, p.display, p.project,
+                       m.rating, m.note
+                FROM prompts p
+                LEFT JOIN prompt_metadata m ON p.id = m.prompt_id
+                WHERE p.timestamp >= ? AND p.timestamp <= ?
+                AND p.display NOT LIKE '/login%' AND p.display NOT LIKE '/logout%'
+                ORDER BY p.timestamp ASC
+            """
+            cursor.execute(query, (start_ts, end_ts))
+            rows = cursor.fetchall()
+
+            prompts = []
+            for row in rows:
+                prompts.append({
+                    'id': row['id'],
+                    'timestamp': row['timestamp'],
+                    'display': row['display'],
+                    'project': row['project'],
+                    'rating': row['rating'],
+                    'note': row['note']
+                })
+
+            return jsonify({'prompts': prompts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
         finally:
             tracker.close()
 
