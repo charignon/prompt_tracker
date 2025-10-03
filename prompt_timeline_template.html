@@ -1294,9 +1294,8 @@
                 .attr('width', innerWidth)
                 .attr('height', innerHeight + 100);
 
-            // Create a clipped group for content
-            contentGroup = g.append('g')
-                .attr('clip-path', 'url(#timeline-clip)');
+            // Create content group WITHOUT clipping - clipping during transforms causes issues
+            contentGroup = g.append('g');
 
             // Time scale (X axis) - domain covers all prompts for infinite panning
             const [year, month, day] = currentDate.split('-').map(Number);
