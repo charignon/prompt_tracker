@@ -1080,7 +1080,7 @@
         let autoRerankTimeout = null;  // Timeout for auto-rerank after inactivity
 
         // D3 visualization variables
-        let svg, g, contentGroup, xScale, yScale, zoom, xAxis;
+        let svg, g, contentGroup, xScale, yScale, zoom, xAxis, drag;
         const margin = {top: 50, right: 40, bottom: 60, left: 150};
 
         // ===== VIEWPORT STATE MANAGER - Single Source of Truth =====
@@ -1452,7 +1452,7 @@
                 });
 
             // Add drag behavior for panning - works great with trackpad!
-            const drag = d3.drag()
+            drag = d3.drag()
                 .filter(function(event) {
                     // Allow all mouse/touch drag events
                     return !event.ctrlKey && event.button !== 2;
@@ -1534,7 +1534,7 @@
             }
 
             // Add "now" line (current time indicator) inside clipped area - RED
-            const now = new Date();
+            // Reuse 'now' variable from viewport calculation above
             const nowLine = contentGroup.append('line')
                 .attr('class', 'now-line')
                 .attr('x1', xScale(now))
