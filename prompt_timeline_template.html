@@ -167,6 +167,8 @@
             user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
+            /* Ensure SVG content respects clipping */
+            overflow: visible;  /* Let clip-path and mask handle clipping */
             cursor: grab;
         }
 
@@ -192,6 +194,9 @@
         .prompt-dot {
             cursor: pointer;
             transition: r 0.2s, stroke-width 0.2s;
+            /* Optimize rendering during transforms */
+            will-change: cx, cy, transform;
+            shape-rendering: crispEdges;
         }
 
         .prompt-dot.unrated {
@@ -1211,7 +1216,7 @@
         const colorScale = d3.scaleOrdinal(d3.schemeTableau10);
 
         prompts.forEach(p => {
-            const project = p.project || 'Unknown';
+            const project = p.project || 'unknown';
             if (!projectGroups[project]) {
                 projectGroups[project] = [];
                 projectColors[project] = colorScale(project);
@@ -1284,19 +1289,37 @@
             g = svg.append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
-            // Create clip path inside g (same coordinate space as contentGroup)
-            g.append('defs')
-                .append('clipPath')
+            // Create clip path and mask inside g (same coordinate space as contentGroup)
+            // Start at y=15 to exclude the axis area and prevent dots from overlapping
+            const defs = g.append('defs');
+
+            defs.append('clipPath')
                 .attr('id', 'timeline-clip')
                 .append('rect')
                 .attr('x', 0)
-                .attr('y', 0)
+                .attr('y', 15)  // Start below axis area where first track begins
                 .attr('width', innerWidth)
                 .attr('height', virtualHeight);
 
-            // Create content group WITH clipping to prevent overlap with axis
-            contentGroup = g.append('g')
+            // Also create a mask for better enforcement during transforms
+            defs.append('mask')
+                .attr('id', 'timeline-mask')
+                .append('rect')
+                .attr('x', 0)
+                .attr('y', 15)
+                .attr('width', innerWidth)
+                .attr('height', virtualHeight)
+                .attr('fill', 'white');
+
+            // Mike Bostock nested group pattern for proper clipping with transforms
+            // Outer group has clipping (in screen space)
+            const clipGroup = g.append('g')
                 .attr('clip-path', 'url(#timeline-clip)');
+
+            // Inner group gets transforms (pan/zoom)
+            // This ensures clipping happens AFTER transform in the rendering pipeline
+            contentGroup = clipGroup.append('g')
+                .attr('class', 'transform-group');
 
             // Time scale (X axis) - domain covers all prompts for infinite panning
             const [year, month, day] = currentDate.split('-').map(Number);
@@ -1326,15 +1349,41 @@
                 .domain([minTime, maxTime])
                 .range([0, rangeWidth]);
 
-            // Update clip path width to match the full range width (not just viewport)
+            // Update clip path and mask width to match the full range width
             g.select('#timeline-clip rect')
                 .attr('width', rangeWidth)
                 .attr('height', virtualHeight);
+            g.select('#timeline-mask rect')
+                .attr('width', rangeWidth)
+                .attr('height', virtualHeight);
 
-            // Set initial transform to show from 11pm previous day to 1am next day (26 hour window)
+            // Set initial transform to show from 11pm previous day to appropriate end time
             const prevDay = new Date(dayStart.getTime() - (24 * 60 * 60 * 1000)); // Previous day midnight
             const viewStart = new Date(prevDay.getTime() + (23 * 60 * 60 * 1000)); // 11pm previous day
-            const viewEnd = new Date(dayStart.getTime() + (25 * 60 * 60 * 1000)); // 1am next day (25 hours after current day midnight)
+
+            // Special case: if viewing today, show up to 1 hour past current time instead of 1am tomorrow
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const isToday = dayStart.getTime() === today.getTime();
+
+            let viewEnd;
+            if (isToday) {
+                // Show up to 1 hour past current time
+                viewEnd = new Date(now.getTime() + (60 * 60 * 1000));
+            } else {
+                // Show up to 1am next day (26 hour window)
+                viewEnd = new Date(dayStart.getTime() + (25 * 60 * 60 * 1000));
+            }
+
+            // DEBUG: Log initial viewport calculation
+            console.log('=== INITIAL VIEWPORT DEBUG ===');
+            console.log('currentDate:', currentDate);
+            console.log('dayStart:', dayStart);
+            console.log('isToday:', isToday);
+            console.log('viewStart (11pm prev day):', viewStart);
+            console.log('viewEnd:', viewEnd);
+            console.log('xScale domain:', xScale.domain());
+            console.log('xScale range:', xScale.range());
 
             // Calculate scale to fit 26 hours in viewport
             const viewDuration = viewEnd.getTime() - viewStart.getTime(); // 26 hours in ms
@@ -1343,6 +1392,15 @@
             const viewWidthInScale = viewEndX - viewStartX;
             const initialScale = innerWidth / viewWidthInScale; // Scale to fit 26 hours
             const initialX = -viewStartX * initialScale; // Translate to show viewStart at left edge
+
+            console.log('innerWidth:', innerWidth);
+            console.log('viewStartX:', viewStartX);
+            console.log('viewEndX:', viewEndX);
+            console.log('viewWidthInScale:', viewWidthInScale);
+            console.log('initialScale:', initialScale);
+            console.log('initialX:', initialX);
+            console.log('Expected viewport end:', (viewEndX * initialScale) + initialX);
+            console.log('=== END DEBUG ===');
 
             // Project scale (Y axis) - start at maxDotRadius + buffer to prevent clipping
             const maxDotRadius = 20; // From radiusScale range
@@ -1554,7 +1612,7 @@
                 [currentProjectFilter] : projects;
 
             const visiblePrompts = prompts.filter(p => {
-                const project = p.project || 'Unknown';
+                const project = p.project || 'unknown';
                 return visibleProjects.includes(project);
             });
 
@@ -1579,8 +1637,13 @@
                 .duration(300)
                 .attr('cx', d => xScale(new Date(d.timestamp)))
                 .attr('cy', d => {
-                    const project = d.project || 'Unknown';
-                    return yScale(project) + yScale.bandwidth() / 2;
+                    const project = d.project || 'unknown';
+                    const y = yScale(project);
+                    if (y === undefined) {
+                        console.error('yScale returned undefined for project:', project, 'Available projects:', yScale.domain());
+                        return 0;
+                    }
+                    return y + yScale.bandwidth() / 2;
                 })
                 .attr('r', d => radiusScale(d.display.length));
 
@@ -1598,8 +1661,13 @@
                 })
                 .attr('cx', d => xScale(new Date(d.timestamp)))
                 .attr('cy', d => {
-                    const project = d.project || 'Unknown';
-                    return yScale(project) + yScale.bandwidth() / 2;
+                    const project = d.project || 'unknown';
+                    const y = yScale(project);
+                    if (y === undefined) {
+                        console.error('yScale returned undefined for project:', project, 'Available projects:', yScale.domain());
+                        return 0;
+                    }
+                    return y + yScale.bandwidth() / 2;
                 })
                 .attr('r', 0)
                 .style('opacity', 0.8)
@@ -1618,7 +1686,7 @@
         }
 
         function zoomed(event) {
-            // Only apply X-axis transform (horizontal zoom/pan)
+            // Back to updating positions - transform approach causes distortion
             const transform = d3.zoomIdentity
                 .translate(event.transform.x, 0)
                 .scale(event.transform.k);
@@ -1659,7 +1727,8 @@
                 .ticks(tickInterval)
                 .tickFormat(tickFormat));
 
-            // Update dots X position and opacity based on viewport visibility
+            // Back to updating individual positions to avoid distortion
+            // But keep the nested group structure for better clipping
             const container = document.getElementById('timeline-scroll-container');
             const viewportWidth = container.clientWidth - margin.left - margin.right;
 
@@ -1692,14 +1761,10 @@
                     return newXScale(new Date(timestamp));
                 });
 
-            // Update track lines X position
+            // Update track lines to span the full range width
             contentGroup.selectAll('.track-line')
                 .attr('x1', 0)
-                .attr('x2', function() {
-                    const container = document.getElementById('timeline-scroll-container');
-                    const width = container.clientWidth;
-                    return width - margin.left - margin.right;
-                });
+                .attr('x2', rangeWidth);
 
             // Update zoom display
             const zoomPercent = Math.round(zoomLevel * 100);
@@ -1811,6 +1876,8 @@
             const hiddenCount = totalProjects - displayedProjects;
 
             const badge = document.getElementById('hidden-projects-badge');
+            if (!badge) return; // Element doesn't exist in this view
+
             if (hiddenCount > 0) {
                 badge.textContent = `+${hiddenCount}`;
                 badge.style.display = 'inline';
@@ -2369,7 +2436,7 @@
                 .range([0, innerWidth]);
 
             // Group by project
-            const selectedProjects = [...new Set(selected.map(p => p.project || 'Unknown'))];
+            const selectedProjects = [...new Set(selected.map(p => p.project || 'unknown'))];
             const theaterYScale = d3.scaleBand()
                 .domain(selectedProjects)
                 .range([0, innerHeight])
@@ -2425,7 +2492,7 @@
                 .attr('class', 'theater-dot')
                 .attr('cx', d => theaterXScale(new Date(d.timestamp)))
                 .attr('cy', d => {
-                    const project = d.project || 'Unknown';
+                    const project = d.project || 'unknown';
                     return theaterYScale(project) + theaterYScale.bandwidth() / 2;
                 })
                 .attr('r', d => radiusScale(d.display.length))
@@ -2497,7 +2564,7 @@
                 promptTime.textContent = time;
                 const projectName = prompt.project ? (prompt.project.split('/').pop() || prompt.project) : 'Unknown';
                 promptProject.textContent = projectName;
-                promptProject.title = prompt.project || 'Unknown';
+                promptProject.title = prompt.project || 'unknown';
                 promptText.textContent = prompt.display;
                 promptText.scrollTop = 0; // Reset scroll position
 
@@ -2560,7 +2627,7 @@
             promptTime.textContent = time;
             const projectName = prompt.project ? (prompt.project.split('/').pop() || prompt.project) : 'Unknown';
             promptProject.textContent = projectName;
-            promptProject.title = prompt.project || 'Unknown';
+            promptProject.title = prompt.project || 'unknown';
             promptText.textContent = prompt.display;
             promptText.scrollTop = 0; // Reset scroll position
 
@@ -2743,7 +2810,7 @@
                 promptTime.textContent = time;
                 const projectName = prompt.project ? (prompt.project.split('/').pop() || prompt.project) : 'Unknown';
                 promptProject.textContent = projectName;
-                promptProject.title = prompt.project || 'Unknown';
+                promptProject.title = prompt.project || 'unknown';
                 promptText.textContent = prompt.display;
                 promptText.scrollTop = 0; // Reset scroll position
 
