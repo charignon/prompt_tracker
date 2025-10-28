@@ -96,6 +96,6 @@ clean:
 
 serve:
 	@echo "Starting Prompt Tracker in foreground..."
-	@$(CURDIR)/prompt-tracker serve --foreground
+	@uv run --with flask $(CURDIR)/prompt-tracker serve --foreground
 
 fg: serve
