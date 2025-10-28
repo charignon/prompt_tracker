@@ -640,7 +640,15 @@
 
             // Adaptive tick interval and format based on zoom level
             let tickInterval, tickFormat;
-            if (zoomLevel < 1) {
+            if (zoomLevel < 0.3) {
+                // Very zoomed out: daily intervals
+                tickInterval = d3.timeDay.every(1);
+                tickFormat = d3.timeFormat('%b %d'); // e.g., "Oct 02"
+            } else if (zoomLevel < 0.6) {
+                // Zoomed out: 12-hour intervals
+                tickInterval = d3.timeHour.every(12);
+                tickFormat = d3.timeFormat('%H:%M');
+            } else if (zoomLevel < 1) {
                 // Zoomed out: 4-hour intervals
                 tickInterval = d3.timeHour.every(4);
                 tickFormat = d3.timeFormat('%H:%M');
@@ -1169,6 +1177,33 @@
             d3.select('#tooltip').style('opacity', 0);
         }
 
+        function toggleControlsPanel() {
+            const panel = document.getElementById('controls-panel');
+            const btn = document.getElementById('toggle-controls-btn');
+            const isCollapsed = panel.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                panel.classList.remove('collapsed');
+                btn.classList.remove('collapsed');
+                localStorage.setItem('controlsPanelCollapsed', 'false');
+            } else {
+                panel.classList.add('collapsed');
+                btn.classList.add('collapsed');
+                localStorage.setItem('controlsPanelCollapsed', 'true');
+            }
+        }
+
+        // Restore panel state from localStorage on page load
+        function restoreControlsPanelState() {
+            const isCollapsed = localStorage.getItem('controlsPanelCollapsed') === 'true';
+            if (isCollapsed) {
+                const panel = document.getElementById('controls-panel');
+                const btn = document.getElementById('toggle-controls-btn');
+                panel.classList.add('collapsed');
+                btn.classList.add('collapsed');
+            }
+        }
+
         function changeDate(delta) {
             // Parse date as local time to avoid timezone issues
             const [year, month, day] = currentDate.split('-').map(Number);
@@ -1279,16 +1314,27 @@
         function toggleSelection() {
             selectionMode = !selectionMode;
             const btn = document.getElementById('select-btn');
+            const selectionActions = document.getElementById('selection-actions');
+            const reorderBtn = document.getElementById('reorder-btn');
+            const toggleControlsBtn = document.getElementById('toggle-controls-btn');
 
             if (selectionMode) {
                 btn.classList.add('active');
                 btn.textContent = '✓ Selecting';
                 setMode(MODES.SELECTION);
+                // Show selection actions, hide normal controls
+                selectionActions.style.display = 'flex';
+                reorderBtn.style.display = 'none';
+                toggleControlsBtn.style.display = 'none';
             } else {
                 btn.classList.remove('active');
                 btn.textContent = '⬚ Select';
                 setMode(MODES.NORMAL);
                 clearSelection();
+                // Hide selection actions, show normal controls
+                selectionActions.style.display = 'none';
+                reorderBtn.style.display = 'inline-block';
+                toggleControlsBtn.style.display = 'inline-block';
             }
         }
 
@@ -2028,6 +2074,11 @@
             const crawlText = document.getElementById('crawl-text');
             crawlText.innerHTML = '';
 
+            // Restore saved font size
+            const savedFontSize = parseInt(localStorage.getItem('crawlFontSize') || '16');
+            crawlText.style.fontSize = savedFontSize + 'px';
+            document.getElementById('crawl-font-size').textContent = savedFontSize + 'px';
+
             selected.forEach((prompt, index) => {
                 const promptDiv = document.createElement('div');
                 promptDiv.className = 'crawl-prompt';
@@ -2333,8 +2384,27 @@
             updateSelectionUI();
         }
 
+        function adjustCrawlFontSize(delta) {
+            const crawlText = document.getElementById('crawl-text');
+            const fontSizeDisplay = document.getElementById('crawl-font-size');
+
+            // Get current font size
+            const currentSize = parseInt(localStorage.getItem('crawlFontSize') || '16');
+
+            // Calculate new size (min 10px, max 32px)
+            const newSize = Math.max(10, Math.min(32, currentSize + delta));
+
+            // Apply new font size
+            crawlText.style.fontSize = newSize + 'px';
+            fontSizeDisplay.textContent = newSize + 'px';
+
+            // Save to localStorage
+            localStorage.setItem('crawlFontSize', newSize);
+        }
+
         // Initialize
         initTimeline();
+        restoreControlsPanelState();
 
         // No filtering - showing all projects and prompts
 

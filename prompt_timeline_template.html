@@ -11,42 +11,56 @@
 </head>
 <body>
     <div id="timeline-container">
-        <div id="header">
-            <div class="header-row">
-                <h1>Prompt Timeline</h1>
-                <div class="controls">
-                    <button class="zoom-btn" onclick="showCalendar()" title="Calendar view">📅</button>
-                    <div class="control-group">
-                        <span class="control-label">Date:</span>
-                        <button class="date-nav-btn" onclick="changeDate(-1)" title="Previous day">←</button>
-                        <input type="date" id="date-input" value="{{CURRENT_DATE}}" onchange="onDateChange(this.value)">
-                        <button class="date-nav-btn" onclick="changeDate(1)" title="Next day">→</button>
+        <!-- Essential header - always visible -->
+        <div id="essential-header">
+            <div class="essential-row">
+                <div class="essential-info">
+                    <input type="date" id="date-input" value="{{CURRENT_DATE}}" onchange="onDateChange(this.value)" title="Change date">
+                    <span id="visible-range-display">Loading...</span>
+                    <span id="stats">{{STATS}}</span>
+                </div>
+                <div class="essential-controls">
+                    <!-- Selection actions - shown when items are selected -->
+                    <div id="selection-actions" style="display:none; gap: 8px;">
+                        <button class="zoom-btn" id="select-btn" onclick="toggleSelection()" title="Exit selection mode">✓ Selecting</button>
+                        <span id="selection-count" style="color: #888; font-size: 12px;"></span>
+                        <button class="zoom-btn" id="export-btn" onclick="exportSelected()" title="Export selected to CSV">📥 CSV</button>
+                        <button class="zoom-btn" id="animate-theater-btn" onclick="animateTheater()" title="Theater mode">🎬 Theater</button>
+                        <button class="zoom-btn" id="animate-10x-btn" onclick="animate10x()" title="Quick preview">▶ 10x</button>
+                        <button class="zoom-btn" id="animate-crawl-btn" onclick="animateCrawl()" title="Opening crawl">⭐ Crawl</button>
                     </div>
+
+                    <!-- Normal controls -->
+                    <button class="zoom-btn" id="reorder-btn" onclick="refreshTimeline()" title="Toggle sort: Smart / Count / A-Z">
+                        Sort A-Z
+                        <span id="project-count-badge"></span>
+                    </button>
+                    <button class="zoom-btn" id="toggle-controls-btn" onclick="toggleControlsPanel()" title="Show/hide controls">
+                        <span id="toggle-icon">▼</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsible controls panel -->
+        <div id="controls-panel" class="controls-panel">
+            <div class="panel-grid">
+                <div class="panel-section">
+                    <h3>Navigation</h3>
+                    <div class="control-group">
+                        <button class="zoom-btn" onclick="showCalendar()" title="Calendar view">📅 Calendar</button>
+                        <button class="date-nav-btn" onclick="changeDate(-1)" title="Previous day">← Prev</button>
+                        <button class="date-nav-btn" onclick="changeDate(1)" title="Next day">Next →</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>View Options</h3>
                     <div class="control-group">
                         <span class="control-label">Zoom:</span>
                         <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">−</button>
                         <span id="zoom-level-display">100%</span>
                         <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
-                    </div>
-                    <button class="zoom-btn" id="reorder-btn" onclick="refreshTimeline()" title="Sort projects alphabetically">
-                        Sort A-Z
-                        <span id="project-count-badge" style="margin-left: 4px; color: white; border-radius: 10px; padding: 2px 6px; font-size: 10px; font-weight: bold;"></span>
-                    </button>
-                    <button class="zoom-btn" id="select-btn" onclick="toggleSelection()" title="Select prompts (drag to select) • Press S">⬚ Select</button>
-                    <div class="actions-group">
-                        <button class="zoom-btn" id="export-btn" onclick="exportSelected()" title="Export selected to CSV" style="display:none;">📥 CSV</button>
-                        <button class="zoom-btn" id="animate-theater-btn" onclick="animateTheater()" title="Theater mode - 2 minute animation" style="display:none;">🎬 Theater</button>
-                        <button class="zoom-btn" id="animate-10x-btn" onclick="animate10x()" title="Quick preview - 10x speed" style="display:none;">▶ 10x</button>
-                        <button class="zoom-btn" id="animate-crawl-btn" onclick="animateCrawl()" title="Opening crawl - scrolling text" style="display:none;">⭐ Crawl</button>
-                        <span id="selection-count" style="display:none; margin-left: 8px; color: #888; font-size: 12px;"></span>
-                    </div>
-                </div>
-            </div>
-            <div class="header-row" style="margin-top: 5px;">
-                <div class="controls">
-                    <div class="control-group">
-                        <span class="control-label" style="color: #888;">Viewing:</span>
-                        <span id="visible-range-display" style="color: #aaa; font-size: 12px; font-family: monospace; white-space: nowrap;">Loading...</span>
                     </div>
                     <div class="control-group">
                         <span class="control-label">Project:</span>
@@ -55,37 +69,45 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <span class="control-label">Show:</span>
+                        <span class="control-label">Limit:</span>
                         <select id="max-projects" onchange="setMaxVisibleProjects(parseInt(this.value))">
                             <option value="999">All</option>
-                            <option value="20">20 projects</option>
-                            <option value="15">15 projects</option>
-                            <option value="10">10 projects</option>
-                            <option value="5">5 projects</option>
-                            <option value="3">3 projects</option>
-                            <option value="2">2 projects</option>
+                            <option value="20">20</option>
+                            <option value="15">15</option>
+                            <option value="10">10</option>
+                            <option value="5">5</option>
+                            <option value="3">3</option>
+                            <option value="2">2</option>
                         </select>
                     </div>
                 </div>
-            </div>
-            <div id="stats">{{STATS}}</div>
-            <div class="zoom-help">Vertical scroll through projects • Click and drag to pan • Pinch to zoom • Click dots for details • Keys: S (select) = (zoom in) - (zoom out)</div>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-dot" style="background: #27ae60"></div>
-                    <span>High (4-5 ★)</span>
+
+                <div class="panel-section">
+                    <h3>Actions</h3>
+                    <button class="zoom-btn" onclick="toggleSelection()" title="Select prompts (drag to select) • Press S">⬚ Select</button>
                 </div>
-                <div class="legend-item">
-                    <div class="legend-dot" style="background: #f39c12"></div>
-                    <span>Medium (3 ★)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot" style="background: #e74c3c"></div>
-                    <span>Low (1-2 ★)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot" style="background: #666"></div>
-                    <span>Unrated</span>
+
+                <div class="panel-section panel-section-wide">
+                    <h3>Rating Legend</h3>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #27ae60"></div>
+                            <span>High (4-5 ★)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #f39c12"></div>
+                            <span>Medium (3 ★)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #e74c3c"></div>
+                            <span>Low (1-2 ★)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #666"></div>
+                            <span>Unrated</span>
+                        </div>
+                    </div>
+                    <div class="zoom-help">💡 Vertical scroll • Click/drag to pan • Pinch to zoom • Click dots for details • Keys: S (select) = (zoom in) - (zoom out)</div>
                 </div>
             </div>
         </div>
@@ -133,6 +155,11 @@
             <button class="theater-btn" onclick="exitCrawlMode()">← Back</button>
         </div>
         <div class="crawl-clock" id="crawl-clock"></div>
+        <div class="crawl-font-controls">
+            <button class="crawl-font-btn" onclick="adjustCrawlFontSize(-2)" title="Decrease font size">−</button>
+            <span id="crawl-font-size">16px</span>
+            <button class="crawl-font-btn" onclick="adjustCrawlFontSize(2)" title="Increase font size">+</button>
+        </div>
         <div class="crawl-container">
             <div class="crawl-text" id="crawl-text"></div>
         </div>
