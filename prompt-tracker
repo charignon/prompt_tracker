@@ -424,7 +424,7 @@ def format_stars(rating: Optional[int]) -> str:
     return "★" * rating + "☆" * (5 - rating)
 
 
-def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'):
+def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1', foreground: bool = False):
     """Start a web server for browsing timelines"""
     try:
         from flask import Flask, request, jsonify, redirect
@@ -433,8 +433,25 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
         print("Install it with: pip install flask")
         sys.exit(1)
 
+    import logging
+
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
+
+    # Configure logging for foreground mode
+    if foreground:
+        # Set up console logging
+        log_handler = logging.StreamHandler(sys.stdout)
+        log_handler.setFormatter(logging.Formatter(
+            '[%(asctime)s] %(levelname)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        ))
+        app.logger.addHandler(log_handler)
+        app.logger.setLevel(logging.INFO)
+        # Also configure werkzeug logger
+        werkzeug_logger = logging.getLogger('werkzeug')
+        werkzeug_logger.addHandler(log_handler)
+        werkzeug_logger.setLevel(logging.INFO)
 
     def get_tracker():
         """Get a thread-safe tracker instance"""
@@ -609,11 +626,15 @@ def serve_web_interface(db_path: Path, port: int = 8080, host: str = '127.0.0.1'
     import webbrowser
     webbrowser.open(f'http://{host}:{port}')
 
-    app.run(host=host, port=port, debug=False, threaded=True)
+    if foreground:
+        print(f"✓ Server running at http://{host}:{port}")
+        print("  Press Ctrl+C to stop")
+
+    app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
 
 
 def serve_react_interface(db_path: Path, port: int = 8081, host: str = '127.0.0.1',
-                          api_port: int = 8080):
+                          api_port: int = 8080, foreground: bool = False):
     """Start a React web interface with Flask API backend"""
     try:
         from flask import Flask, request, jsonify
@@ -624,10 +645,26 @@ def serve_react_interface(db_path: Path, port: int = 8081, host: str = '127.0.0.
 
     import threading
     import time
+    import logging
 
     # Start Flask API server in background thread
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
+
+    # Configure logging for foreground mode
+    if foreground:
+        # Set up console logging
+        log_handler = logging.StreamHandler(sys.stdout)
+        log_handler.setFormatter(logging.Formatter(
+            '[%(asctime)s] %(levelname)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        ))
+        app.logger.addHandler(log_handler)
+        app.logger.setLevel(logging.INFO)
+        # Also configure werkzeug logger
+        werkzeug_logger = logging.getLogger('werkzeug')
+        werkzeug_logger.addHandler(log_handler)
+        werkzeug_logger.setLevel(logging.INFO)
 
     def get_tracker():
         """Get a thread-safe tracker instance"""
@@ -803,12 +840,14 @@ Examples:
     serve_parser = subparsers.add_parser('serve', help='Start web server for browsing timelines')
     serve_parser.add_argument('--port', type=int, default=8080, help='Port to run server on (default: 8080)')
     serve_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+    serve_parser.add_argument('--foreground', action='store_true', help='Run in foreground with console output')
 
     # Serve React command
     serve_react_parser = subparsers.add_parser('serve_react', help='Start React web interface with API backend')
     serve_react_parser.add_argument('--port', type=int, default=8081, help='Port for React dev server (default: 8081)')
     serve_react_parser.add_argument('--api-port', type=int, default=8080, help='Port for API backend (default: 8080)')
     serve_react_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+    serve_react_parser.add_argument('--foreground', action='store_true', help='Run in foreground with console output')
 
     # DB path option
     parser.add_argument('--db', type=Path, default=DEFAULT_DB_PATH,
@@ -1001,7 +1040,7 @@ Examples:
                 print(f"✓ Synced {count} new prompts")
 
             tracker.close()  # Close the main tracker before starting server
-            serve_web_interface(args.db, port=args.port, host=args.host)
+            serve_web_interface(args.db, port=args.port, host=args.host, foreground=args.foreground)
             return  # Server manages its own connections
 
         elif args.command == 'serve_react':
@@ -1011,7 +1050,7 @@ Examples:
                 print(f"✓ Synced {count} new prompts")
 
             tracker.close()  # Close the main tracker before starting server
-            serve_react_interface(args.db, port=args.port, api_port=args.api_port, host=args.host)
+            serve_react_interface(args.db, port=args.port, api_port=args.api_port, host=args.host, foreground=args.foreground)
             return  # Server manages its own connections
 
     finally:

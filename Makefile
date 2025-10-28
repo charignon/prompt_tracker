@@ -9,7 +9,7 @@ SERVICE_LABEL = com.prompttracker
 LOG_FILE = $(HOME)/Library/Logs/prompt-tracker.log
 ERROR_LOG_FILE = $(HOME)/Library/Logs/prompt-tracker.error.log
 
-.PHONY: help install uninstall status restart logs clean check
+.PHONY: help install uninstall status restart logs clean check serve fg
 
 help:
 	@echo "Prompt Tracker Service Management"
@@ -22,6 +22,8 @@ help:
 	@echo "  make logs       - Show service logs"
 	@echo "  make clean      - Remove log files"
 	@echo "  make check      - Check service configuration"
+	@echo "  make serve      - Run server in foreground"
+	@echo "  make fg         - Alias for 'make serve'"
 
 check:
 	@echo "Checking configuration..."
@@ -91,3 +93,9 @@ clean:
 	@echo "Cleaning log files..."
 	@rm -f $(LOG_FILE) $(ERROR_LOG_FILE)
 	@echo "✓ Log files removed"
+
+serve:
+	@echo "Starting Prompt Tracker in foreground..."
+	@$(CURDIR)/prompt-tracker serve --foreground
+
+fg: serve
