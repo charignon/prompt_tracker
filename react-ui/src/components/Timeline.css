@@ -1,0 +1,135 @@
+.timeline-container {
+  flex: 1;
+  overflow: auto;
+  background: #1a1a1a;
+  position: relative;
+  scroll-behavior: smooth;
+  user-select: none;
+}
+
+.timeline-content {
+  min-width: 2000px;
+  padding: 20px;
+  position: relative;
+}
+
+.time-axis {
+  position: relative;
+  height: 40px;
+  border-bottom: 2px solid #444;
+  margin-bottom: 20px;
+}
+
+.time-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-left: 1px solid #333;
+}
+
+.time-label {
+  position: absolute;
+  top: 5px;
+  left: -30px;
+  font-size: 10px;
+  color: #888;
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: left top;
+}
+
+.swim-lane {
+  display: flex;
+  margin-bottom: 15px;
+  min-height: 50px;
+}
+
+.swim-lane-label {
+  width: 130px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #666;
+  padding: 10px 10px 10px 0;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swim-lane-content {
+  flex: 1;
+  position: relative;
+  border-top: 1px solid #333;
+  min-height: 50px;
+}
+
+.prompt-dot {
+  position: absolute;
+  /* Width and height set dynamically based on prompt length */
+  border-radius: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 1;
+}
+
+.prompt-dot:hover {
+  transform: translate(-50%, -50%) scale(1.5);
+  z-index: 10;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.prompt-dot.selected {
+  transform: translate(-50%, -50%) scale(1.5);
+  box-shadow: 0 0 15px #f97316;
+  border: 2px solid #fff;
+  z-index: 11;
+}
+
+.prompt-dot.unrated {
+  background: #666;
+}
+
+.prompt-dot.rating-low {
+  background: #e74c3c;
+}
+
+.prompt-dot.rating-medium {
+  background: #f39c12;
+}
+
+.prompt-dot.rating-high {
+  background: #27ae60;
+}
+
+.tooltip {
+  position: fixed;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  max-width: 300px;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -100%);
+  margin-top: -10px;
+}
+
+.tooltip-time {
+  color: #888;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.tooltip-text {
+  color: #e0e0e0;
+  line-height: 1.5;
+}
+
+.tooltip-rating {
+  color: #f39c12;
+  margin-top: 5px;
+}
